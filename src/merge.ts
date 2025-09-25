@@ -1,7 +1,10 @@
 import type { ReadableChannel } from './channel-api.js'
 import { Channel } from './Channel.js'
 
-type IterableElement<T> = 
+/**
+ * @internal Might be removed without notice
+ */
+export type IterableElementType<T> = 
     T extends AsyncIterable<infer U>
         ? U
         : never
@@ -18,8 +21,8 @@ type IterableElement<T> =
 export function merge<TSources extends AsyncIterable<any>[]>(
     sources: TSources,
     resultCapacity: number,
-): ReadableChannel<IterableElement<TSources[number]>> {
-    type T = IterableElement<TSources[number]>
+): ReadableChannel<IterableElementType<TSources[number]>> {
+    type T = IterableElementType<TSources[number]>
     const output = new Channel<T>(resultCapacity)
     
     void main()

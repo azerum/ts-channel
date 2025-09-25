@@ -1,8 +1,11 @@
 import { shuffle } from './_fisherYatesShuffle.js'
 import type { ReadableChannel } from './channel-api.js'
-import type { NonEmptyArray } from './_NonEmptyArray.js'
+import type { NonEmptyArray } from './NonEmptyArray.js'
 
-type SelectResult<TArgs> = 
+/**
+ * @internal Might be removed without notice
+ */
+export type SelectResult<TArgs> = 
     TArgs extends ReadableChannel<infer U>[]
         ? [ReadableChannel<U>, U | undefined]
         : never

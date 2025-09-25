@@ -1,4 +1,4 @@
-import type { NonEmptyArray } from './_NonEmptyArray.js'
+import type { NonEmptyArray } from './NonEmptyArray.js'
 import type { ReadableChannel } from './channel-api.js'
 import { select } from './select.js'
 import { timeout } from './timeout.js'
