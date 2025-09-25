@@ -10,7 +10,7 @@ export interface BaseReadableChannel<out T> {
     read: () => Promise<T | undefined>
 }
 
-export interface ReadableChannel<out T> extends BaseReadableChannel<T> {
+export interface ReadableChannel<out T> extends BaseReadableChannel<T>, AsyncIterable<T> {
     get closed(): boolean
 
     /**

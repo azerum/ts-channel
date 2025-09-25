@@ -2,7 +2,7 @@ import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
 import { CannotWriteIntoClosedChannel, type ReadableChannel, type WritableChannel } from './channel-api.js'
 
-export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, AsyncIterable<T> {
+export class Channel<T> implements ReadableChannel<T>, WritableChannel<T> {
     // TODO: this should be a ring buffer
     private readonly buffer: T[] = []
 
