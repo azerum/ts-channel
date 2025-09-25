@@ -13,6 +13,10 @@ export async function select<
 >(
     channels: TArgs
 ): Promise<SelectResult<TArgs>> {
+    if (channels.length === 0) {
+        throw new Error('select() requires at least one channel')
+    }
+
     const controller = new AbortController()
 
     const promises = channels.map(
