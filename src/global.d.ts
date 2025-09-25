@@ -17,3 +17,5 @@ declare interface AbortSignal {
 
     readonly aborted: boolean
 }
+
+declare function setTimeout(callback: () => void, ms: number): any
