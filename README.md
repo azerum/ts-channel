@@ -2,8 +2,9 @@ Next tasks:
 
 - [x] Complete test suite
 - [x] Write tests for select()
+- [x] Fix AbortController ambient types error
+- [x] partitionTime() with tests
 - [] Add usage examples
-- [] Fix AbortController ambient types error
 - [] Write README.md
 - [] Generate TypeDoc
 - [] Use ring buffer

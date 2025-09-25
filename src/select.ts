@@ -1,7 +1,6 @@
 import { shuffle } from './_fisherYatesShuffle.js'
 import type { ReadableChannel } from './channel-api.js'
-
-type NonEmptyArray<T> = [T, ...T[]]
+import type { NonEmptyArray } from './_NonEmptyArray.js'
 
 type SelectResult<TArgs> = 
     TArgs extends ReadableChannel<infer U>[]
