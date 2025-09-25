@@ -1,6 +1,6 @@
 import { NamedError } from './_NamedError.js'
 
-export interface BaseReadableChannel<T> {
+export interface BaseReadableChannel<out T> {
     /**
      * Blocks until the channel has a value to read - either a value in the buffer
      * or a blocked {@link WritableChannel.write}. Returns `undefined`
@@ -9,7 +9,7 @@ export interface BaseReadableChannel<T> {
     read: () => Promise<T | undefined>
 }
 
-export interface ReadableChannel<T> extends BaseReadableChannel<T> {
+export interface ReadableChannel<out T> extends BaseReadableChannel<T> {
     get closed(): boolean
 
     /**
@@ -33,7 +33,7 @@ export interface ReadableChannel<T> extends BaseReadableChannel<T> {
     waitForReadReady: <const T>(value: T, signal?: AbortSignal) => Promise<T>
 }
 
-export interface WritableChannel<T> {
+export interface WritableChannel<in T> {
     get closed(): boolean
 
     /**
