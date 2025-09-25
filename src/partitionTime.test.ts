@@ -31,13 +31,7 @@ async function expectToEnd<T>(nextResult: Promise<IteratorResult<T>>): Promise<v
 
 test('Consumes channel values in groups of groupSize', async () => {
     const ch = new Channel<number>(10)
-
-    const iterator = partitionTime({
-        source: ch,
-        groupSize: 3,
-        nextValueTimeoutMs: 60_000
-    })
-    [Symbol.asyncIterator]()
+    const iterator = partitionTime(ch, 3, 60_000)[Symbol.asyncIterator]()
 
     await ch.write(1)
     await ch.write(2)
@@ -57,13 +51,7 @@ test(
 
     async () => {
         const ch = new Channel<number>(10)
-
-        const iterator = partitionTime({
-            source: ch,
-            groupSize: 3,
-            nextValueTimeoutMs: 60_000
-        })
-        [Symbol.asyncIterator]()
+        const iterator = partitionTime(ch, 3, 60_000)[Symbol.asyncIterator]()
 
         await ch.write(1)
         ch.close()
@@ -79,13 +67,7 @@ describe(
     () => {
         test('Closed immediately', async () => {
             const ch = new Channel<number>(0)
-
-            const iterator = partitionTime({
-                source: ch,
-                groupSize: 3,
-                nextValueTimeoutMs: 60_000
-            })
-            [Symbol.asyncIterator]()
+            const iterator = partitionTime(ch, 3, 60_000)[Symbol.asyncIterator]()
 
             ch.close()
 
@@ -95,13 +77,7 @@ describe(
 
         test('Closed after yielded group', async () => {
             const ch = new Channel<number>(3)
-
-            const iterator = partitionTime({
-                source: ch,
-                groupSize: 3,
-                nextValueTimeoutMs: 60_000
-            })
-            [Symbol.asyncIterator]()
+            const iterator = partitionTime(ch, 3, 60_000)[Symbol.asyncIterator]()
 
             await ch.write(1)
             await ch.write(2)
@@ -124,13 +100,7 @@ test(
     async () => {
         useFakeSetTimeout()
         const ch = new Channel<number>(10)
-
-        const iterator = partitionTime({
-            source: ch,
-            groupSize: 3,
-            nextValueTimeoutMs: 1000
-        })
-        [Symbol.asyncIterator]()
+        const iterator = partitionTime(ch, 3, 1000)[Symbol.asyncIterator]()
 
         const nextPromise = iterator.next()
 
@@ -142,21 +112,16 @@ test(
         vi.advanceTimersByTime(500)
         await expectToBlock(nextPromise)
 
-        vi.advanceTimersByTime(1000)
+        vi.advanceTimersByTime(500)
         await expectNextValue(nextPromise, [1, 2])
     }
 )
 
 test('nextValueTimeoutMs timer resets with each read value', async () => {
     useFakeSetTimeout()
-    const ch = new Channel<number>(10)
 
-    const iterator = partitionTime({
-        source: ch,
-        groupSize: 3,
-        nextValueTimeoutMs: 10_000
-    })
-    [Symbol.asyncIterator]()
+    const ch = new Channel<number>(10)
+    const iterator = partitionTime(ch, 3, 10_000)[Symbol.asyncIterator]()
 
     const nextPromise = iterator.next()
 
@@ -166,7 +131,7 @@ test('nextValueTimeoutMs timer resets with each read value', async () => {
     vi.advanceTimersByTime(5000)
     await expectToBlock(nextPromise)
 
-    // 11s has elapsed since the start of consuming iterator, 
+    // 11s > 10s has elapsed since the start of consuming iterator, 
     // but only 6s has elapsed since the last read value - 2
 
     await ch.write(2)

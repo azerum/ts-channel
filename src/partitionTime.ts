@@ -3,12 +3,6 @@ import type { ReadableChannel } from './channel-api.js'
 import { select } from './select.js'
 import { timeout } from './timeout.js'
 
-export interface PartitionTime<T> {
-    source: ReadableChannel<T>
-    groupSize: number
-    nextValueTimeoutMs: number
-}
-
 /**
  * Reads from `source` in groups of size `groupSize`. The returned iterable
  * closes once `source` does. If more than `nextValueTimeoutMs` elapses since
@@ -17,17 +11,38 @@ export interface PartitionTime<T> {
  * 
  * @example
  * 
+ * Simple example:
+ * 
  * ```ts
- * function producer(): ReadableChannel<T> {
+ * function numbers(): ReadableChannel<number> {
+ *  const ch = new Channel<number>(0)
+ * 
+ *  void (async () => {
+ *      for (let i = 0;; ++i) {
+ *          await ch.write(i)
+ *      }
+ *  })()
+ * 
+ *  return ch
+ * }
+ * 
+ * // This gives iterable:
+ * // [0, 1, 2]
+ * // [3, 4, 5]
+ * // [6, 7, 8]
+ * // ...
+ * const groups = partitionTime(numbers(), 3, 1000)
+ * ```
+ * 
+ * Grouping with timeout:
+ * 
+ * ```ts
+ * function producer(): ReadableChannel<Something> {
  *  // ...
  * }
  * 
- * async function saver(values: ReadableChannel<T>) {
- *  const batchedValues = partitionTime({ 
- *      source: values, 
- *      groupSize: 50, 
- *      nextValueTimeoutMs: 10_000 
- *  })
+ * async function saver(values: ReadableChannel<Something>) {
+ *  const batchedValues = partitionTime(values, 50, 10_000)
  * 
  *  // Does not wait for longer than 10s if `producer()` produces
  *  // less than 50 values
@@ -37,11 +52,11 @@ export interface PartitionTime<T> {
  * }
  * ```
  */
-export async function* partitionTime<T>({
-    source,
-    groupSize,
-    nextValueTimeoutMs,
-}: PartitionTime<T>): AsyncIterable<[T, ...T[]]> {
+export async function* partitionTime<T>(
+    source: ReadableChannel<T>,
+    groupSize: number,
+    nextValueTimeoutMs: number,
+): AsyncIterable<[T, ...T[]]> {
     while (true) {
         const first = await source.read()
     
