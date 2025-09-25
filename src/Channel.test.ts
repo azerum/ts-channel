@@ -2,6 +2,16 @@ import { describe, expect, test } from 'vitest'
 import { Channel } from './Channel.js'
 import { expectToBlock } from './_expectToBlock.js'
 import { CannotWriteIntoClosedChannel } from './channel-api.js'
+import { AbortedError } from './_AbortablePromise.js'
+
+test.for([
+    -1,
+    3.14,
+    Infinity,
+    NaN,
+])('If capacity is not an integer >= 0, constructor throws', async c => {
+    expect(() => new Channel(c)).toThrowError(c.toString())
+})
 
 describe('Unbuffered', () => {
     test('write() blocks until read()', async () => {
@@ -24,12 +34,12 @@ describe('Unbuffered', () => {
         await expect(r).resolves.toEqual(42)
     })
 
-    test('When there is no blocked write(), tryRead() returns undefined', async () => {
+    test('If there is no blocked write(), tryRead() returns undefined', async () => {
         const ch = new Channel(0)
         expect(ch.tryRead()).toBe(undefined)
     })
 
-    test('When there is a blocked write(), tryRead() unblocks it', async () => {
+    test('If there is a blocked write(), tryRead() unblocks it', async () => {
         const ch = new Channel(0)
 
         const w = ch.write(42)
@@ -39,7 +49,17 @@ describe('Unbuffered', () => {
         await w
     })
 
-    test('When there is a blocked write(), waitForReadReady() resolves', async () => {
+    test('waitForReadReady() blocks until there is a blocked write', async () => {
+        const ch = new Channel(0)
+
+        const w = ch.waitForReadReady(undefined)
+        await expectToBlock(w)
+
+        ch.write(1)
+        await w
+    })
+
+    test('If there is a blocked write(), waitForReadReady() does not block', async () => {
         const ch = new Channel(0)
 
         ch.write(1)
@@ -89,7 +109,7 @@ describe('Buffered', () => {
         expect(ch.tryRead()).toBe(undefined)
     })
 
-    test('If buffer is not empty, waitForReadReady() resolves', async () => {
+    test('If buffer is not empty, waitForReadReady() does not block', async () => {
         const ch = new Channel(3)
 
         await ch.write(1)
@@ -115,7 +135,7 @@ describe('All capacities', () => {
     const capacities = [0, 5]
 
     test.for(capacities)(
-        'Blocked write()s wait for read()s and resolve in FIFO order',
+        'Blocked write()s wait for read()s and resolve in FIFO order (%s)',
 
         async c => {
             const ch = await makeChannelWithFullBuffer(c)
@@ -149,7 +169,7 @@ describe('All capacities', () => {
     }
 
     test.for(capacities)(
-        'Blocked read()s wait for writes()s and resolve in FIFO order',
+        'Blocked read()s wait for writes()s and resolve in FIFO order (%s)',
 
         async c => {
             const ch = new Channel(c)
@@ -168,36 +188,44 @@ describe('All capacities', () => {
         }
     )
 
-    test.for(capacities)('After close(), new read()s return undefined', async c => {
-        const ch = new Channel(c)
+    test.for(capacities)(
+        'After close(), new read()s return undefined (%s)',
 
-        ch.close()
+        async c => {
+            const ch = new Channel(c)
 
-        for (let i = 0; i < 2; ++i) {
-            await expect(ch.read()).resolves.toBe(undefined)
+            ch.close()
+
+            for (let i = 0; i < 2; ++i) {
+                await expect(ch.read()).resolves.toBe(undefined)
+            }
         }
-    })
-
-    test.for(capacities)('After close(), blocked and new write()s reject', async c => {
-        const ch = await makeChannelWithFullBuffer(c)
-
-        const writes = [ch.write(1), ch.write(2)]
-        await expectToBlock(Promise.race(writes))
-
-        ch.close()
-
-        for (const promise of writes) {
-            await expect(promise).rejects.toThrowError(CannotWriteIntoClosedChannel)
-        }
-
-        for (let i = 0; i < 2; ++i) {
-            await expect(ch.write(i)).rejects.toThrowError(CannotWriteIntoClosedChannel)
-        }
-    })
+    )
 
     test.for(capacities)(
-        'If channel is empty and there is blocked read(), waitForReadReady() ' +
-        'does not unblock on write()',
+        'After close(), blocked and new write()s reject (%s)',
+
+        async c => {
+            const ch = await makeChannelWithFullBuffer(c)
+
+            const writes = [ch.write(1), ch.write(2)]
+            await expectToBlock(Promise.race(writes))
+
+            ch.close()
+
+            for (const promise of writes) {
+                await expect(promise).rejects.toThrowError(CannotWriteIntoClosedChannel)
+            }
+
+            for (let i = 0; i < 2; ++i) {
+                await expect(ch.write(i)).rejects.toThrowError(CannotWriteIntoClosedChannel)
+            }
+        }
+    )
+
+    test.for(capacities)(
+        'If channel is empty, but there is also a blocked read(), waitForReadReady() ' +
+        'does not unblock on write() (%s)',
 
         async c => {
             const ch = new Channel(c)
@@ -212,51 +240,119 @@ describe('All capacities', () => {
             await expect(r).resolves.toBe(1)
         }
     )
+
+    test.for(capacities)('close() is idempotent (%s)', c => {
+        const ch = new Channel(c)
+
+        ch.close()
+        ch.close()
+    })
+
+    test.for(capacities)('After close(), .closed is true (%s)', c => {
+        const ch = new Channel(c)
+
+        expect(ch.closed).toBe(false)
+        ch.close()
+        expect(ch.closed).toBe(true)
+    })
+
+    test.for(capacities)(
+        'After close(), blocked waitForReadReady() resolves (%s)',
+
+        async c => {
+            const ch = new Channel(c)
+
+            const w = ch.waitForReadReady(undefined)
+            await expectToBlock(w)
+
+            ch.close()
+            await w
+        }
+    )
+
+    test.for(capacities)(
+        'After close(), waitForReadReady() never blocks again (%s)',
+
+        async c => {
+            const ch = new Channel(c)
+
+            ch.close()
+
+            for (let i = 0; i < 2; ++i) {
+                await ch.waitForReadReady(undefined)
+            }
+        }
+    )
+
+    test.for(capacities)(
+        'If there are multiple blocked waitForReadReady(), after write(), ' +
+        'only one of them unblocks',
+
+        async c => {
+            const ch = new Channel(c)
+
+            const w1 = ch.waitForReadReady(1)
+            const w2 = ch.waitForReadReady(2)
+
+            await expectToBlock(Promise.race([w1, w2]))
+
+            ch.write(1)
+
+            const winner = await Promise.race([w1, w2])
+
+            const remainingWait = winner === 1 ? w2 : w1
+            await expectToBlock(remainingWait)
+        }
+    )
+
+    test.for(capacities)(
+        'If there are multiple blocked waitForReadReady(), after close(), ' +
+        'all of them unblock (%s)',
+
+        async c => {
+            const ch = new Channel(c)
+
+            const w1 = ch.waitForReadReady(1)
+            const w2 = ch.waitForReadReady(2)
+
+            await expectToBlock(Promise.race([w1, w2]))
+
+            ch.close()
+            await expect(Promise.all([w1, w2])).resolves.toEqual([1, 2])
+        }
+    )
+
 })
 
-test('close() is idempotent', () => {
+test('waitForReadyReady() can be cancelled (%s)', async () => {
     const ch = new Channel(0)
 
-    ch.close()
-    ch.close()
-})
+    const controller = new AbortController()
 
-test('After close(), .closed is true', () => {
-    const ch = new Channel(0)
-
-    expect(ch.closed).toBe(false)
-    ch.close()
-    expect(ch.closed).toBe(true)
-})
-
-test('After close(), blocked waitForReadReady() resolves', async () => {
-    const ch = new Channel(0)
-
-    const w = ch.waitForReadReady(undefined)
+    const w = ch.waitForReadReady(undefined, controller.signal)
     await expectToBlock(w)
 
-    ch.close()
-    await w
-})
+    controller.abort()
 
-test('After close(), waitForReadReady() never blocks again', async () => {
-    const ch = new Channel(0)
+    await expect(w).rejects.toThrowError(AbortedError)
 
-    ch.close()
+    // Test that the wait is indeed removed - on write(), new waits will 
+    // be resolved. If wait is not removed properly, it may "swallow"
+    // some write(), causing no new wait to be resolved
+    //
+    // Since order of wait resolutions is not specified, it could be
+    // random, so run the code multiple times
 
-    for (let i = 0; i < 2; ++i) {
-        await ch.waitForReadReady(undefined)
+    for (let i = 0; i < 10; ++i) {
+        const newWait = ch.waitForReadReady(undefined)
+
+        await expectToBlock(newWait)
+
+        const write = ch.write(1)
+        await newWait
+
+        // Consume the write so the channel is empty again
+        await ch.read()
+        await write
     }
 })
-
-describe(
-    'If there are concurrent blocked waitForReadReady(), only one of them resolves',
-
-    () => {
-        test.todo('On write()', async () => {
-        })
-
-        test.todo('On close()', async () => {
-        })
-    }
-)
