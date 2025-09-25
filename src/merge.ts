@@ -6,6 +6,15 @@ type IterableElement<T> =
         ? U
         : never
 
+/**
+ * Merges AsyncIterables into a channel that yields values as soon as any 
+ * iterable does
+ * 
+ * The returned channel closes once all iterables are closed
+ * 
+ * @param resultCapacity Capacity of the buffer of the returned channel. 0
+ * would be a default choice
+ */
 export function merge<TSources extends AsyncIterable<any>[]>(
     sources: TSources,
     resultCapacity: number,
