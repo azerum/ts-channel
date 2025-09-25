@@ -118,12 +118,12 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
 
         this._closed = true
 
-        this.resolveBlockedReadsWithUndefined()
-        this.rejectBlockedWrites()
-        this.resolveSomeBlockedWait()
+        this.resolveAllBlockedReadsWithUndefined()
+        this.rejectAllBlockedWrites()
+        this.resolveAllBlockedWaits()
     }
 
-    private resolveBlockedReadsWithUndefined() {
+    private resolveAllBlockedReadsWithUndefined() {
         for (const resolve of this.blockedReads) {
             resolve(undefined)
         }
@@ -131,7 +131,7 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
         this.blockedReads = []
     }
 
-    private rejectBlockedWrites() {
+    private rejectAllBlockedWrites() {
         const error = new CannotWriteIntoClosedChannel()
 
         for (const write of this.blockedWrites) {
@@ -148,6 +148,14 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
             first()
             this.blockedWaits.delete(first)
         }
+    }
+
+    private resolveAllBlockedWaits() {
+        for (const resolve of this.blockedWaits) {
+            resolve()
+        }
+
+        this.blockedWaits.clear()
     }
 }
 
