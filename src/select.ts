@@ -7,6 +7,13 @@ type SelectResult<TArgs> =
         ? [ReadableChannel<U>, U | undefined]
         : never
 
+/**
+ * Like `select {}` statement in Go, but only reading from channel is supported.
+ * Attempts to read from all channels at once, unblocks with the value of the
+ * first readable channel. For definition of "readable", see {@link ReadableChannel.waitUntilReadable}
+ * 
+ * If multiple channels are readable, selects one at random
+ */
 export async function select<
     const TArgs extends NonEmptyArray<ReadableChannel<unknown>>
 >(
