@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      '@types/node':
-        specifier: 22.18.0
-        version: 22.18.0
       '@vitest/coverage-v8':
         specifier: 3.2.4
         version: 3.2.4(vitest@3.2.4(@types/node@22.18.0))
@@ -985,6 +982,7 @@ snapshots:
   '@types/node@22.18.0':
     dependencies:
       undici-types: 6.21.0
+    optional: true
 
   '@vitest/coverage-v8@3.2.4(vitest@3.2.4(@types/node@22.18.0))':
     dependencies:
@@ -1350,7 +1348,8 @@ snapshots:
 
   typescript@5.9.2: {}
 
-  undici-types@6.21.0: {}
+  undici-types@6.21.0:
+    optional: true
 
   vite-node@3.2.4(@types/node@22.18.0):
     dependencies:

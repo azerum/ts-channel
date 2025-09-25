@@ -1,5 +1,11 @@
+// Definitions for used global APIs, available both in Node.js and browsers
+
 declare var AbortController: {
     new(): AbortController
+
+    // This is needed for compatibility with @types/node, whose definitions
+    // are checked unless skipLibCheck: true (we keep it false for now)
+    prototype: AbortController
 }
 
 declare interface AbortController {
@@ -18,4 +24,4 @@ declare interface AbortSignal {
     readonly aborted: boolean
 }
 
-declare function setTimeout(callback: () => void, ms: number): any
+declare function setTimeout(callback: () => void, ms: number): unknown
