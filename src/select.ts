@@ -1,20 +1,23 @@
 import { shuffle } from './_fisherYatesShuffle.js'
 import type { ReadableChannel } from './channel-api.js'
 
+type NonEmptyArray<T> = [T, ...T[]]
+
 type SelectResult<TArgs> = 
     TArgs extends ReadableChannel<infer U>[]
-        ? U | undefined
+        ? [ReadableChannel<U>, U | undefined]
         : never
 
-export async function select<const TArgs extends ReadableChannel<unknown>[]>(
+export async function select<
+    const TArgs extends NonEmptyArray<ReadableChannel<unknown>>
+>(
     channels: TArgs
 ): Promise<SelectResult<TArgs>> {
     const controller = new AbortController()
 
     const promises = channels.map(
-        (ch, index) => ch.waitForReadReady(index, controller.signal)
+        (ch, index) => ch.waitUntilReadable(index, controller.signal)
     )
-
     
     while (true) {
         // Shuffle the array on every re-run to keep select() fair. Remember
@@ -30,9 +33,9 @@ export async function select<const TArgs extends ReadableChannel<unknown>[]>(
             controller.abort()
             
             //@ts-expect-error
-            return result
+            return [ch, result]
         }
 
-        promises[winnerIndex] = ch.waitForReadReady(winnerIndex, controller.signal)
+        promises[winnerIndex] = ch.waitUntilReadable(winnerIndex, controller.signal)
     }
 }

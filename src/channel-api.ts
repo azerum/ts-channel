@@ -1,3 +1,4 @@
+import type { AbortedError } from './AbortablePromise.js'
 import { NamedError } from './_NamedError.js'
 
 export interface BaseReadableChannel<out T> {
@@ -19,18 +20,19 @@ export interface ReadableChannel<out T> extends BaseReadableChannel<T> {
     tryRead: () => T | undefined
 
     /**
-     * Blocks until the channel is read-ready. Read-ready means that either 
-     * (a) the channel is closed or (b) the channel has values in buffer or
-     * blocked writes. Intuitively, `read()` called on read-ready channel 
-     * will never block
+     * Blocks until the channel is "readable". "Readable" means that the 
+     * next call to {@link ReadableChannel.read} will not block. In other words, 
+     * readable channel either has a value in buffer, has a blocked 
+     * {@link WritableChannel.write}, or is closed
      * 
-     * If multiple waits are performed on the same channel, only one 
-     * of them (randomly chosen) is unblocked once the channel becomes
-     * read-ready
+     * If channel is already readable, resolves immediately
      * 
-     * Resolves immediately if the channel is ready-ready
+     * @param value Value to return on resolution
+     * 
+     * @param signal Can be used to cancel the wait. After cancelling, 
+     * the returned promise will reject with {@link AbortedError}
      */
-    waitForReadReady: <const T>(value: T, signal?: AbortSignal) => Promise<T>
+    waitUntilReadable: <const T>(value: T, signal?: AbortSignal) => Promise<T>
 }
 
 export interface WritableChannel<in T> {
@@ -51,6 +53,12 @@ export interface WritableChannel<in T> {
     write: (value: Exclude<T, undefined>) => Promise<void>
 
     /**
+     * Closes the channel. Closed channel does not accept new writes
+     * ({@link WritableChannel.write} after close will throw)
+     * 
+     * Calls to {@link ReadableChannel.read} will consume values remained
+     * in the buffer (if any), and then eventually will keep returning `undefined`
+     * 
      * Idempotent
      */
     close: () => void

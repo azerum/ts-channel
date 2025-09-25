@@ -10,7 +10,7 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
     private blockedWrites: BlockedWrite<T>[] = []
     private blockedReads: ResolveReadFn<T>[] = []
 
-    private readonly blockedWaits = new Set<() => void>()
+    private readonly blockedReadableWaits = new Set<() => void>()
 
     private _closed = false
 
@@ -39,7 +39,7 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
             return
         }
 
-        this.resolveSomeBlockedWait()
+        this.resolveSomeReadableWait()
 
         if (this.buffer.length < this.capacity) {
             this.buffer.push(value)
@@ -90,7 +90,7 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
         return this.buffer.shift()
     }
 
-    waitForReadReady<const U>(value: U, signal?: AbortSignal): Promise<U> {
+    waitUntilReadable<const U>(value: U, signal?: AbortSignal): Promise<U> {
         return new AbortablePromise(resolve => {
             if (this._closed) {
                 resolve(value)
@@ -103,10 +103,10 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
             }
 
             const resolveFn = () => resolve(value)
-            this.blockedWaits.add(resolveFn)
+            this.blockedReadableWaits.add(resolveFn)
 
             return () => {
-                this.blockedWaits.delete(resolveFn)
+                this.blockedReadableWaits.delete(resolveFn)
             }
         }, signal)
     }
@@ -118,12 +118,12 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
 
         this._closed = true
 
-        this.resolveAllBlockedReadsWithUndefined()
-        this.rejectAllBlockedWrites()
-        this.resolveAllBlockedWaits()
+        this.resolveAllReadsWithUndefined()
+        this.rejectAllWrites()
+        this.resolveAllReadableWaits()
     }
 
-    private resolveAllBlockedReadsWithUndefined() {
+    private resolveAllReadsWithUndefined() {
         for (const resolve of this.blockedReads) {
             resolve(undefined)
         }
@@ -131,7 +131,7 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
         this.blockedReads = []
     }
 
-    private rejectAllBlockedWrites() {
+    private rejectAllWrites() {
         const error = new CannotWriteIntoClosedChannel()
 
         for (const write of this.blockedWrites) {
@@ -141,21 +141,21 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T>, Async
         this.blockedWrites = []
     }
 
-    private resolveSomeBlockedWait() {
-        const { value: first } = this.blockedWaits[Symbol.iterator]().next()
+    private resolveSomeReadableWait() {
+        const { value: first } = this.blockedReadableWaits[Symbol.iterator]().next()
 
         if (first !== undefined) {
             first()
-            this.blockedWaits.delete(first)
+            this.blockedReadableWaits.delete(first)
         }
     }
 
-    private resolveAllBlockedWaits() {
-        for (const resolve of this.blockedWaits) {
+    private resolveAllReadableWaits() {
+        for (const resolve of this.blockedReadableWaits) {
             resolve()
         }
 
-        this.blockedWaits.clear()
+        this.blockedReadableWaits.clear()
     }
 }
 
