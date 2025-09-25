@@ -1,0 +1,17 @@
+{
+    "extends": "./tsconfig.json",
+
+    "compilerOptions": {
+        "outDir": "out",
+        "declaration": true,
+        "sourceMap": true,
+        "declarationMap": true,
+
+        // @types/node are used for test code only. The library should
+        // isomorphic. This disables all @types/ from automatically being
+        // available to library code
+        "types": []
+    },
+
+    "exclude": ["./src/**/*.test.ts", "./src/**/*.type-test.ts"]
+}

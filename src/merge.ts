@@ -1,0 +1,31 @@
+import type { ReadableChannel } from './channel-api.js'
+import { Channel } from './Channel.js'
+
+type IterableElement<T> = 
+    T extends AsyncIterable<infer U>
+        ? U
+        : never
+
+export function merge<TSources extends AsyncIterable<any>[]>(
+    sources: TSources,
+    resultCapacity: number,
+): ReadableChannel<IterableElement<TSources[number]>> {
+    type T = IterableElement<TSources[number]>
+    const output = new Channel<T>(resultCapacity)
+    
+    void main()
+    return output
+
+    async function main() {
+        const promises = sources.map(worker)
+        await Promise.all(promises)
+
+        output.close()
+    }
+
+    async function worker(source: AsyncIterable<T>) {
+        for await (const value of source) {
+            await output.write(value)
+        }
+    }
+}

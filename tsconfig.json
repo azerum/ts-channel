@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noUnusedParameters": true,
+        "noUnusedLocals": true,
+        "noImplicitReturns": true,
+
+        // Settings recommended for apps running under Node.js: 
+        // https://www.typescriptlang.org/docs/handbook/modules/guides/choosing-compiler-options.html#im-compiling-and-running-the-outputs-in-nodejs
+        "module": "node16",
+        "moduleResolution": "node16",
+        "esModuleInterop": true,
+        "verbatimModuleSyntax": true,
+
+        "target": "ES2022",
+        "lib": ["ES2022", "ESNext.Disposable"],
+
+        "rootDir": "src",
+    },
+
+    "include": ["./src/**/*.ts"]
+}
