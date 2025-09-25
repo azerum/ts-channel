@@ -1,3 +1,4 @@
+export * from './AbortablePromise.js'
 export * from './asyncIteratorForChannel.js'
 export * from './channel-api.js'
 export * from './Channel.js'

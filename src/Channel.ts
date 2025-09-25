@@ -1,4 +1,4 @@
-import { AbortablePromise } from './_AbortablePromise.js'
+import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
 import { CannotWriteIntoClosedChannel, type ReadableChannel, type WritableChannel } from './channel-api.js'
 

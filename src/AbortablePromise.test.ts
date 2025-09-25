@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import EventEmitter from 'events'
-import { AbortablePromise, AbortedError } from './_AbortablePromise.js'
+import { AbortablePromise, AbortedError } from './AbortablePromise.js'
 
 afterEach(() => {
     vi.useRealTimers()
