@@ -1,31 +1,43 @@
-Go-style channels for Node.js:
+CSP-style channels for TypeScript with `async`/`await`
 
-- Procedural-looking code with async/await that naturally respects backpressure
+- Communicating Sequential Processes
+- Go channels
+- Clojure's `core.async`
+- [@thi.ng/csp](https://thi.ng/csp) - for `read()` and `tryRead()` return types which 
+avoid extra allocations
 
-- Buffered & unbuffered
+# Install
 
-- `select()` like `select {}` statement in Go (limited to reading from channels) - 
-to read from multiple channels, whichever is first (e.g. timeout logic)
+```shell
+npm install @azerum/channel
+```
 
-- `for await` loop to iterate over channel
+# Features
 
-- Operators: `merge`, `partitionTime`, `timeout`, `mapWritableChannel`, 
-`mapReadableChannel`
+- Write familiar procedural code with `async`/`await` to process streams of data,
+while respecting backpressure. No more callback hell
+
+- Buffered & unbuffered channels
+
+- `select()` function for timeout, cancellation, and other logic similar to 
+`select {}` statement in Go (currently, only reads are supported)
+
+- Some useful operators: `merge()`, `partitionTime()`, `timeout()`
+
+- Focus on TS ergonomics: strict types, inferred nicely when possible
+
+- Works in Node.js and browsers; relies on global `setTimeout`, `AbortController`
+
+- No dependencies
 
 - Thoroughly tested
 
-- Focus on TS ergonomics: types are inferred nicely when possible
+[API docs](https://azerum.github.io/ts-channel) describe what each method
+on `Channel` does and more
 
-- Zero dependencies; runs in Node.js and browser (depends on `setTimeout`, 
-`AbortController`)
+# Examples
 
-Inspired by:
+See `src/_examples` directory:
 
-- Tony Hoare's CSP
-- Go channels
-- [@thi.ng/csp](https://@thi.ng/csp) - idea of lightweight return types of `read()`
-and `tryRead()` without extra allocations
-
-Examples:
-
-TODO
+- `ping-pong.ts`: ping-pong
+TODO: more
