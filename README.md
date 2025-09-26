@@ -6,7 +6,7 @@ Next tasks:
 - [x] partitionTime() with tests
 - [] Add usage examples
 - [] Write README.md
-- [] Generate TypeDoc
+- [x] Generate TypeDoc
 - [] Use ring buffer
 - [] Use deques?
 - [x] Export AbortablePromise?

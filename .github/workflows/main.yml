@@ -1,0 +1,52 @@
+name: Build and Deploy TypeDoc Docs
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  pages: write
+
+  # What does this permissions do? See
+  # https://github.com/actions/deploy-pages/issues/329#issuecomment-2030446649
+  #
+  # In short, this token authenticates that action (deploy-pages) is done
+  # by GitHub workflow. It does not authorize to do anything on its own - that's what
+  # `pages` is for
+  id-token: write
+
+jobs:
+  build-and-deploy-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Pnpm
+        uses: pnpm/action-setup@v4
+  
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Docs
+        run: pnpm doc
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages 
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./docs
+      
+      - name: Deploy Pages
+        uses: actions/deploy-pages@v4
