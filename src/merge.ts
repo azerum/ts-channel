@@ -2,7 +2,7 @@ import type { ReadableChannel } from './channel-api.js'
 import { Channel } from './Channel.js'
 
 /**
- * @internal Might be removed without notice
+ * @internal Internal helper: might be removed without notice
  */
 export type IterableElementType<T> = 
     T extends AsyncIterable<infer U>

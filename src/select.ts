@@ -3,8 +3,8 @@ import type { NotUndefined, ReadableChannel } from './channel-api.js'
 import type { NonEmptyArray } from './NonEmptyArray.js'
 
 /**
- * @internal Might be removed without notice
-*/
+ * @internal Internal helper: might be removed without notice
+ */
 export type InferSelectResult<TArgs> = 
     TArgs extends ReadableChannel<infer U>[]
         ? SelectResult<U>
