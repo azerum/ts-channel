@@ -1,26 +1,14 @@
 import { NamedError } from './_NamedError.js'
 
 /**
- * Extends Promise to accept not just a `(resolve, reject) => void` function,
- * but `(resolve, reject) => cleanupOnAbort` and `AbortSignal`
+ * Extends Promise constructor to accept not just a `(resolve, reject) => void` 
+ * function, but `(resolve, reject) => cleanupOnAbortFn` and `AbortSignal`
  * 
  * Helps to write promises that can be cancelled without leaking `abort` 
- * listeners and without forgetting to cleanup
+ * listeners on the signal, and without forgetting to write cleanup logic.
+ * See the example below
  * 
- * ## Example:
- * 
- * ```ts
- * function sleep(ms: number, signal?: AbortSignal) {
- *      return new AbortablePromise((resolve, _reject) => {
- *          const handle = setTimeout(() => resolve(), ms)
- * 
- *          // Called only if `signal` is aborted before `setTimeout` elapses
- *          return () => clearTimeout(ms)
- *      }, signal)
- * }
- * ```
- * 
- * ## Semantics:
+ * Semantics:
  * 
  * - Adds `abort` listener on `AbortSignal`. After the promise settles,
  * the listener is always removed (no leaks)
@@ -35,11 +23,27 @@ import { NamedError } from './_NamedError.js'
  * `resolve` or `reject` has not been called yet
  * 
  * - Race condition is possible where `abort` fires, than `resolve` or `reject`
- * is performed before `abort` is handled. In such case `resolve` or `reject`
+ * is performed before `abort` is handled. In such case `resolve`/`reject`
  * always wins.
  * 
  * - If passed `AbortSignal` is already aborted, does not call `executor` at 
  * all, and rejects with `AbortedError`
+ * 
+ * @example
+ *
+ * Promisified `setTimeout` with cancellation that removes the timer
+ * 
+ * ```ts
+ * function sleep(ms: number, signal?: AbortSignal) {
+ *      return new AbortablePromise((resolve, _reject) => {
+ *          const handle = setTimeout(() => resolve(), ms)
+ * 
+ *          // Called only if `signal` is aborted before `setTimeout` callback 
+ *          // is executed
+ *          return () => clearTimeout(ms)
+ *      }, signal)
+ * }
+ * ```
  */
 export class AbortablePromise<T> extends Promise<T> {
     private hasSettled = false

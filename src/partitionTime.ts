@@ -1,13 +1,19 @@
 import type { NonEmptyArray } from './NonEmptyArray.js'
-import type { ReadableChannel } from './channel-api.js'
+import type { NotUndefined, ReadableChannel } from './channel-api.js'
 import { select } from './select.js'
 import { timeout } from './timeout.js'
 
 /**
- * Reads from `source` in groups of size `groupSize`. The returned iterable
- * closes once `source` does. If more than `nextValueTimeoutMs` elapses since
- * last read from `source`, yields incomplete group. Useful for batch processing
- * that does not block for long time
+ * Reads from `source` channel in groups of size `groupSize`. However, if more
+ * than `nextValueTimeoutMs` elapse since the last read from `source`, yields
+ * an incomplete group (with length < `groupSize`) early
+ * 
+ * The returned iterable is closed once `source` closes. If there is an 
+ * incomplete group, it is yielded before closing
+ * 
+ * Never yields empty arrays
+ * 
+ * @param groupSize Must be an integer >= 1
  * 
  * @example
  * 
@@ -52,11 +58,15 @@ import { timeout } from './timeout.js'
  * }
  * ```
  */
-export async function* partitionTime<T>(
+export async function* partitionTime<T extends NotUndefined>(
     source: ReadableChannel<T>,
     groupSize: number,
     nextValueTimeoutMs: number,
 ): AsyncIterable<[T, ...T[]]> {
+    if (!Number.isInteger(groupSize) || groupSize < 1) {
+        throw new Error(`groupSize must be an integer >= 1. Got: ${groupSize}`)
+    }
+
     while (true) {
         const first = await source.read()
     

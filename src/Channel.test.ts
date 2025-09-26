@@ -135,56 +135,52 @@ describe('All capacities', () => {
     const capacities = [0, 5]
 
     test.for(capacities)(
-        'Blocked write()s wait for read()s and resolve in FIFO order (%s)',
+        'Concurrent blocked write()s resolve one-by-one in unspecified order (%s)',
 
         async c => {
             const ch = await makeChannelWithFullBuffer(c)
 
-            const w1 = ch.write('a')
-            const w2 = ch.write('b')
+            const blockedWrites = new Map<number, Promise<number>>()
 
-            await expectToBlock(Promise.race([w1, w2]))
+            for (let i = 0; i < 5; ++i) {
+                const promise = ch.write(i).then(() => i)
+                blockedWrites.set(i, promise)
+            }
 
-            await ch.read()
-            await w1
-            await expectToBlock(w2)
+            while (blockedWrites.size > 0) {
+                const race = Promise.race(blockedWrites.values())
+                await expectToBlock(race)
 
-            await ch.read()
-            await w2
+                await ch.read()
+                const winner = await race
+
+                blockedWrites.delete(winner)
+            }
         }
     )
 
-    async function makeChannelWithFullBuffer(capacity: number) {
-        if (capacity === 0) {
-            return new Channel(0)
-        }
-
-        const channel = new Channel(capacity)
-
-        for (let i = 0; i < capacity; ++i) {
-            await channel.write(i)
-        }
-
-        return channel
-    }
-
     test.for(capacities)(
-        'Blocked read()s wait for writes()s and resolve in FIFO order (%s)',
+        'Concurrent blocked read()s resolve one-by-one in unspecified order (%s)',
 
         async c => {
             const ch = new Channel(c)
 
-            const r1 = ch.read()
-            const r2 = ch.read()
+            const blockedReads = new Map<number, Promise<number>>()
 
-            await expectToBlock(Promise.race([r1, r2]))
+            for (let i = 0; i < 5; ++i) {
+                const promise = ch.read().then(() => i)
+                blockedReads.set(i, promise)
+            }
 
-            await ch.write(42)
-            await expect(r1).resolves.toEqual(42)
-            await expectToBlock(r2)
+            while (blockedReads.size > 0) {
+                const race = Promise.race(blockedReads.values())
+                await expectToBlock(race)
 
-            await ch.write(43)
-            await expect(r2).resolves.toEqual(43)
+                await ch.write(42)
+                const winner = await race
+
+                blockedReads.delete(winner)
+            }
         }
     )
 
@@ -321,10 +317,58 @@ describe('All capacities', () => {
             await expect(Promise.all([w1, w2])).resolves.toEqual([1, 2])
         }
     )
-
 })
 
-test('waitForReadyReady() can be cancelled (%s)', async () => {
+async function makeChannelWithFullBuffer(capacity: number) {
+    if (capacity === 0) {
+        return new Channel(0)
+    }
+
+    const channel = new Channel(capacity)
+
+    for (let i = 0; i < capacity; ++i) {
+        await channel.write(i)
+    }
+
+    return channel
+}
+
+test('Writing `undefined` into channel is not allowed', async () => {
+    // `undefined` is returned by `read()` when channel is closed. If we
+    // allowed writing `undefined` as a regular value, users would not be
+    // able to tell apart "got undefined value" from "channel is closed".
+    // `asyncIteratorForChannel()` and potentially other code would break too
+    //
+    // Users can always use `null` instead
+
+    const ch = new Channel(0)
+
+    //@ts-expect-error `undefined` must not be allowed as a channel value type
+    const w = ch.write(undefined)
+
+    await expect(w).rejects.toThrowError()
+})
+
+test(
+    'If write(b) is called after write(a) unblocks, a will be read before b',
+
+    async () => {
+        const ch = new Channel(10)
+
+        await ch.write(1)
+        await ch.write(2)
+
+        await expect(ch.read()).resolves.toBe(1)
+        await expect(ch.read()).resolves.toBe(2)
+    }
+)
+
+test('Writing `null` into channel is allowed', async () => {
+    const ch = new Channel(1)
+    await ch.write(null)
+})
+
+test('waitForReadyReady() can be cancelled', async () => {
     const ch = new Channel(0)
 
     const controller = new AbortController()

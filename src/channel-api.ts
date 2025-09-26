@@ -1,65 +1,111 @@
-import type { AbortedError } from './AbortablePromise.js'
 import { NamedError } from './_NamedError.js'
 
-export interface BaseReadableChannel<out T> {
+export type NotUndefined = {} | null
+
+export interface BaseReadableChannel<out T extends NotUndefined> {
     /**
-     * Blocks until the channel has a value to read - either a value in the buffer
-     * or a blocked {@link WritableChannel.write}. Returns `undefined`
-     * if the channel is closed
+     * Reads a value from the channel. If there are no values, blocks until
+     * there is
+     * 
+     * If channel is buffered, takes next value from the buffer. This unblocks
+     * first of blocked {@link WritableChannel.write} calls if there are any
+     * 
+     * If channel is unbuffered, simply unblocks the first of blocked 
+     * {@link WritableChannel.write}
+     * 
+     * If the channel is closed and has no values left in the buffer, 
+     * returns `undefined`
+     * 
+     * Concurrent calls are allowed - each read will get own value (no 
+     * two reads will get the same value). If multiple calls are blocked,
+     * they will unblock one-by-one in unspecified order
+     * 
+     * > Note: each blocked call occupies memory, and there is no limit on 
+     * how many calls there can be at once. Typically, programs have a fixed
+     * or a finite number of reads, so this should not be a problem
      */
     read: () => Promise<T | undefined>
 }
 
-export interface ReadableChannel<out T> extends BaseReadableChannel<T>, AsyncIterable<T> {
+export interface ReadableChannel<out T extends NotUndefined> extends BaseReadableChannel<T>, AsyncIterable<T> {
     get closed(): boolean
 
     /**
-     * @returns `undefined` if the channel is closed or empty. Use 
-     * {@link ReadableChannel.closed} to tell the cases apart
+     * Non-blocking version of {@link BaseReadableChannel.read}. Unlike 
+     * {@link ReadableChannel.read}, if channel has no values, returns `undefined`
+     * 
+     * This means `undefined` is returned in two cases: (1) the channel is open
+     * but has no values, and the channel is closed and has no values. Use
+     * {@link ReadableChannel.closed} to tell those apart
      */
     tryRead: () => T | undefined
 
     /**
-     * Blocks until the channel is "readable". "Readable" means that the 
-     * next call to {@link ReadableChannel.read} will not block. In other words, 
-     * readable channel either has a value in buffer, has a blocked 
-     * {@link WritableChannel.write}, or is closed
+     * Blocks until the channel is "readable", meaning that it either:
      * 
-     * If channel is already readable, resolves immediately
+     * - Has a value (value in the buffer or a blocked {@link WritableChannel.write} call)
+     * - Is closed and has no values 
      * 
-     * @param value Value to return on resolution
+     * Intuitively, when a channel is "readable", the next 
+     * {@link ReadableChannel.read} call on it will not block
      * 
-     * @param signal Can be used to cancel the wait. After cancelling, 
-     * the returned promise will reject with {@link AbortedError}
+     * > Note: in combination with {@link ReadableChannel.tryRead}, used to 
+     * implement {@link select}
+     * 
+     * @param value Specify value that will be returned once the wait unblocks
+     * 
+     * @param signal Use the signal to cancel the wait. This frees up memory
+     * occupied by it. After cancelling, the wait will throw {@link AbortedError}
      */
     waitUntilReadable: <const T>(value: T, signal?: AbortSignal) => Promise<T>
 }
 
-export interface WritableChannel<in T> {
+export interface WritableChannel<in T extends NotUndefined> {
     get closed(): boolean
 
     /**
-     * Blocks until the channel has a free space in buffer. If the channel
-     * is unbuffered, blocks until {@link ReadableChannel.read} is 
-     * performed
+     * Writes value to the channel. If there is no free space in the channel,
+     * blocks until there is. This gives backpressure: if writer is faster than 
+     * reader, the channel buffer will eventually fill up and the writer will 
+     * start to block
      * 
-     * Note: writing `undefined` into channels is not supported to make
-     * sure the return value of {@link ReadableChannel.read} is 
-     * unambiguous
+     * If channel is buffered, tries to write value in the buffer, and blocks
+     * if the buffer is full. If channel is unbuffered, waits for 
+     * {@link ReadableChannel.read} call (resolved immediately if there is a
+     * blocked {@link ReadableChannel.read} call already)
      * 
-     * @throws {CannotWriteIntoClosedChannel} If the channel is already closed 
-     * OR if the channel was closed while this call was blocked
+     * If the channel was closed before the call, or became closed while
+     * the call was blocked, throws {@link CannotWriteIntoClosedChannel}
+     * 
+     * Order of values is guaranteed for sequential writes: after 
+     * `await ch.write(1); await ch.write(2)`, `1` is guaranteed to be read
+     * before `2`. Order is not guaranteed for concurrent writes: after
+     * `await Promise.race([ch.write(1), ch.write(2)])`, `1` and `2` can appear
+     * in any order when reading
+     * 
+     * > Note: in current implementation, order of values is the same as 
+     * order of calls to `write()`, so example above will always give `1, 2`. 
+     * This will change in future if `worker_threads` support will be implemented.
+     * It is not advisable to rely on this
      */
-    write: (value: Exclude<T, undefined>) => Promise<void>
+    write: (value: T) => Promise<void>
 
     /**
-     * Closes the channel. Closed channel does not accept new writes
-     * ({@link WritableChannel.write} after close will throw)
+     * Closes the channel. Closed channels cannot be written to. They can
+     * still be read from if there are values left in the buffer
      * 
-     * Calls to {@link ReadableChannel.read} will consume values remained
-     * in the buffer (if any), and then eventually will keep returning `undefined`
+     * More precisely, after close:
      * 
-     * Idempotent
+     * - Blocked calls to {@link WritableChannel.write} will unblock by throwing
+     * {@link CannotWriteIntoClosedChannel}
+     * 
+     * - Future calls to {@link WritableChannel.write} will throw {@link CannotWriteIntoClosedChannel}
+     * immediately
+     * 
+     * - Calls to {@link ReadableChannel.read} will consume the values left
+     * in the buffer before returning `undefined` 
+     * 
+     * Unlike in Go, this method is safe to call multiple times (idempotent)
      */
     close: () => void
 }

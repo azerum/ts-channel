@@ -1,12 +1,12 @@
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
-import type { ReadableChannel, WritableChannel } from './channel-api.js'
+import type { NotUndefined, ReadableChannel, WritableChannel } from './channel-api.js'
 
 /**
  * Applies function to values before they are written into the channel
  */
-export function mapWritableChannel<T, R>(
+export function mapWritableChannel<T extends NotUndefined, R extends NotUndefined>(
     channel: WritableChannel<R>,
-    fn: (value: Exclude<T, undefined>) => Exclude<R, undefined>
+    fn: (value: T) => R
 ): WritableChannel<T> {
     return {
         get closed() {
@@ -27,7 +27,7 @@ export function mapWritableChannel<T, R>(
 /**
  * Applies function to values after they are read from the channel
  */
-export function mapReadableChannel<T, R>(
+export function mapReadableChannel<T extends NotUndefined, R extends NotUndefined>(
     channel: ReadableChannel<T>,
     fn: (value: T) => R
 ): ReadableChannel<R> {

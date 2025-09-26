@@ -2,7 +2,7 @@ import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
 import { CannotWriteIntoClosedChannel, type ReadableChannel, type WritableChannel } from './channel-api.js'
 
-export class Channel<T> implements ReadableChannel<T>, WritableChannel<T> {
+export class Channel<T extends {} | null> implements ReadableChannel<T>, WritableChannel<T> {
     // TODO: this should be a ring buffer
     private readonly buffer: T[] = []
 
@@ -14,6 +14,11 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T> {
 
     private _closed = false
 
+    /**
+     * @param capacity Capacity of the channel buffer. Integer >= 0. If 0,
+     * the channel is *unbuffered*, meaning that each {@link WritableChannel.write}
+     * blocks until {@link ReadableChannel.read} and vice versa
+     */
     constructor(readonly capacity: number) {
         if (!Number.isInteger(capacity) || capacity < 0)
             throw new Error(`capacity must be an integer >= 0. Got: ${capacity}`)
@@ -28,6 +33,10 @@ export class Channel<T> implements ReadableChannel<T>, WritableChannel<T> {
     }
 
     async write(value: T): Promise<void> {
+        if (value === undefined) {
+            throw new Error(`Writing \`undefined\` into channel is not allowed`)
+        }
+
         if (this._closed) {
             throw new CannotWriteIntoClosedChannel()
         }

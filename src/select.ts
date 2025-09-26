@@ -1,27 +1,52 @@
 import { shuffle } from './_fisherYatesShuffle.js'
-import type { ReadableChannel } from './channel-api.js'
+import type { NotUndefined, ReadableChannel } from './channel-api.js'
 import type { NonEmptyArray } from './NonEmptyArray.js'
 
 /**
  * @internal Might be removed without notice
- */
-export type SelectResult<TArgs> = 
+*/
+export type InferSelectResult<TArgs> = 
     TArgs extends ReadableChannel<infer U>[]
-        ? [ReadableChannel<U>, U | undefined]
+        ? SelectResult<U>
         : never
 
+export type SelectResult<T extends NotUndefined> = 
+    [ReadableChannel<T>, T | undefined]
+
 /**
- * Like `select {}` statement in Go, but only reading from channel is supported.
- * Attempts to read from all channels at once, unblocks with the value of the
- * first readable channel. For definition of "readable", see {@link ReadableChannel.waitUntilReadable}
+ * Like `select {}` statement in Go, or `alts!` statement from Clojure's 
+ * `core.async`. Currently supports only reading, not writing
  * 
- * If multiple channels are readable, selects one at random
+ * Allows to read from multiple channels at once, whichever has a value or 
+ * closes first. This is similar to `Promise.race(channels.map(c => c.read()))`,
+ * except:
+ * 
+ * - Only the selected channel will be read from. Values of other channels will
+ * remain intact (`Promise.race` example would read from all channels and 
+ * discards other values)
+ * 
+ * - `select()` tries to be fair: if multiple channels have a value, one is 
+ * selected at random (`Promise.race` would always select the one earlier in 
+ * the array). This is similar to behavior of Go's `select {}`
+ * 
+ * @returns Tuple of `[channel, value]` - the selected channel and the value
+ * read from it. `value` is `undefined` if the channel has closed
+ * 
+ * @example 
+ * 
+ * Read from `ch`, or return `null` if there are no values for 10s+
+ * 
+ * ```ts
+ * function readOrTimeout(ch: ReadableChannel<number>): SelectResult<number> {
+ *  return await select([ch, timeout(10_000)])
+ * }
+ * ```
  */
 export async function select<
-    const TArgs extends NonEmptyArray<ReadableChannel<unknown>>
+    const TArgs extends NonEmptyArray<ReadableChannel<NotUndefined>>
 >(
     channels: TArgs
-): Promise<SelectResult<TArgs>> {
+): Promise<InferSelectResult<TArgs>> {
     if (channels.length === 0) {
         throw new Error('select() requires at least one channel')
     }

@@ -69,10 +69,10 @@ describe(
             const ch = new Channel<number>(0)
             const iterator = partitionTime(ch, 3, 60_000)[Symbol.asyncIterator]()
 
-            ch.close()
+            const nextPromise = iterator.next()
 
-            const group = await iterator.next()
-            expect(group.done).toBe(true)
+            ch.close()
+            await expectToEnd(nextPromise)
         })
 
         test('Closed after yielded group', async () => {
@@ -84,11 +84,8 @@ describe(
             await ch.write(3)
             ch.close()
 
-            const group1 = await iterator.next()
-            expect(group1.value).toStrictEqual([1, 2, 3])
-
-            const group2 = await iterator.next()
-            expect(group2.done).toBe(true)
+            await expectNextValue(iterator.next(), [1, 2, 3])
+            await expectToEnd(iterator.next())
         })
     }
 )
