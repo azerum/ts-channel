@@ -1,8 +1,9 @@
 /**
  * Shuffles the array in place, with each permutation having equal probability
- * of being chosen, using Fisher-Yates algorithm
- *
- * Taken from https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+ * of being chosen
+ * 
+ * Uses Fisher-Yates algorithm taken from 
+ * https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
  */
 export function shuffle(array: unknown[]) {
     for (let i = 1; i <= array.length - 1; ++i) {

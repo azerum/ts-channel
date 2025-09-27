@@ -15,15 +15,15 @@ export type IterableElementType<T> =
  * 
  * The returned channel closes once all iterables are closed
  * 
- * @param resultCapacity Capacity of the buffer of the returned channel. 0
+ * @param outputChannelCapacity Capacity of the buffer of the returned channel. 0
  * would be a default choice
  */
 export function merge<TSources extends AsyncIterable<any>[]>(
     sources: TSources,
-    resultCapacity: number,
+    outputChannelCapacity: number,
 ): ReadableChannel<IterableElementType<TSources[number]>> {
     type T = IterableElementType<TSources[number]>
-    const output = new Channel<T>(resultCapacity)
+    const output = new Channel<T>(outputChannelCapacity)
     
     void main()
     return output

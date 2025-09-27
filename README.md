@@ -6,13 +6,13 @@ CSP-style channels for TypeScript with `async`/`await`
 - [@thi.ng/csp](https://thi.ng/csp) - for `read()` and `tryRead()` return types which 
 avoid extra allocations
 
-# Install
+### Install
 
 ```shell
-npm install @azerum/channel
+npm install @azerum/ts-csp
 ```
 
-# Features
+### Features
 
 - Write familiar procedural code with `async`/`await` to process streams of data,
 while respecting backpressure. No more callback hell
@@ -35,9 +35,16 @@ while respecting backpressure. No more callback hell
 [API docs](https://azerum.github.io/ts-channel) describe what each method
 on `Channel` does and more
 
-# Examples
+### Examples
 
 See `src/_examples` directory:
 
-- `ping-pong.ts`: ping-pong
-TODO: more
+- [Ping-pong](./src/_examples/ping-pong.ts): common introductory example of channels in Go
+
+- [Fast producer and slow consumer](./src/_examples/fast-producer-slow-consumer.ts): demonstrates how backpressure works
+  
+- [Fan-out, fan-in](./src/_examples/fan-out-fan-in.ts): a common pattern to distribute work among N workers and merge results back
+
+- [Batch processing](./src/_examples/batch-processing.ts): read channel in 
+batches of size N, processing one batch at a time - useful for e.g. saving
+data in DB with better throughput
