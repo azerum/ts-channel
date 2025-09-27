@@ -1,0 +1,11 @@
+# Files to include in NPM package. Automatically included:
+#
+# package.json
+# README.md
+
+# Note: unlike in .gitignore, `abc` does not include the directory `abc` - 
+# one has to match the files inside of it
+
+**/*
+!/out/**/*
+!/LICENSE
