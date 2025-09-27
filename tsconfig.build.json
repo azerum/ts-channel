@@ -8,6 +8,8 @@
         "declarationMap": true,
 
         "types": [],
+
+        "incremental": true,
     },
 
     "exclude": ["./src/**/*.test.ts", "./src/_examples/**/*.ts"]
