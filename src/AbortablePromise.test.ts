@@ -1,14 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import EventEmitter from 'events'
 import { AbortablePromise, AbortedError } from './AbortablePromise.js'
+import { abortListenersCount } from './_abortListenersCount.js'
 
 afterEach(() => {
     vi.useRealTimers()
 })
-
-function abortListenersCount(s: AbortSignal) {
-    return EventEmitter.getEventListeners(s, 'abort').length
-}
 
 test('When signal aborts, rejects with AbortedError', async () => {
     const controller = new AbortController()

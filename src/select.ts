@@ -1,5 +1,6 @@
 import { shuffle } from './_fisherYatesShuffle.js'
 import type { NotUndefined, ReadableChannel } from './channel-api.js'
+import { makeAbortSignal } from './_makeAbortSignal.js'
 import type { NonEmptyArray } from './NonEmptyArray.js'
 
 /**
@@ -29,32 +30,45 @@ export type SelectResult<T extends NotUndefined> =
  * selected at random (`Promise.race` would always select the one earlier in 
  * the array). This is similar to behavior of Go's `select {}`
  * 
+ * @param signal Optionally provide AbortSignal to cancel the call. Once
+ * the signal is aborted, `select()` will throw {@link AbortedError}
+ * and cancel all reads
+ * 
  * @returns Tuple of `[channel, value]` - the selected channel and the value
  * read from it. `value` is `undefined` if the channel has closed
  * 
  * @example 
  * 
- * Read from `ch`, or return `null` if there are no values for 10s+
+ * Read from `ch` or timeout:
  * 
  * ```ts
- * function readOrTimeout(ch: ReadableChannel<number>): SelectResult<number> {
- *  return await select([ch, timeout(10_000)])
+ * const [winnerCh, value] = await select([ch, timeout(1000)])
+ * 
+ * if (winnerCh !== ch) {
+ *  // Timed out
  * }
+ * ```
+ * 
+ * Read from `ch` or throw when `signal` is aborted:
+ * 
+ * ```ts
+ * const [_, value] = await select([ch], signal)
  * ```
  */
 export async function select<
     const TArgs extends NonEmptyArray<ReadableChannel<NotUndefined>>
 >(
-    channels: TArgs
+    channels: TArgs,
+    signal?: AbortSignal
 ): Promise<InferSelectResult<TArgs>> {
     if (channels.length === 0) {
         throw new Error('select() requires at least one channel')
     }
 
-    const controller = new AbortController()
+    const [usedSignal, abort] = makeAbortSignal(signal)
 
     const promises = channels.map(
-        (ch, index) => ch.waitUntilReadable(index, controller.signal)
+        (ch, index) => ch.waitUntilReadable(index, usedSignal)
     )
     
     while (true) {
@@ -68,12 +82,12 @@ export async function select<
         const result = ch.tryRead()
 
         if (result !== undefined || ch.closed) {
-            controller.abort()
+            abort()
             
             //@ts-expect-error
             return [ch, result]
         }
 
-        promises[winnerIndex] = ch.waitUntilReadable(winnerIndex, controller.signal)
+        promises[winnerIndex] = ch.waitUntilReadable(winnerIndex, usedSignal)
     }
 }

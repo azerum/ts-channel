@@ -2,6 +2,7 @@ import { expect, test } from 'vitest'
 import { Channel } from './Channel.js'
 import { select } from './select.js'
 import { expectToBlock } from './_expectToBlock.js'
+import { AbortedError } from './AbortablePromise.js'
 
 test('Reads value from one of the channels, whichever becomes readable first', async () => {
     const ch1 = new Channel(0)
@@ -133,5 +134,31 @@ test(
         await ch.write(1)
 
         await expectToBlock(s)
+    }
+)
+
+test(
+    'When passed signal is aborted, throws AbortedError and cancels all reads', 
+    
+    async () => {
+        const ch1 = new Channel(0)
+        const ch2 = new Channel(0)
+
+        const controller = new AbortController()
+        const s = select([ch1, ch2], controller.signal)
+
+        await expectToBlock(s)
+
+        controller.abort()
+        await expect(s).rejects.toThrowError(AbortedError)
+
+        // Verify that no reads are left on the channels - writes block.
+        // Also verify that further reads work as expected
+
+        await expectToBlock(ch1.write(1))
+        await expectToBlock(ch2.write(2))
+
+        await expect(ch1.read()).resolves.toBe(1)
+        await expect(ch2.read()).resolves.toBe(2)
     }
 )

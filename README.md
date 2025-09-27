@@ -19,8 +19,10 @@ while respecting backpressure. No more callback hell
 
 - Buffered & unbuffered channels
 
-- `select()` function for timeout, cancellation, and other logic similar to 
-`select {}` statement in Go (currently, only reads are supported)
+- `select()` function similar to `select{}` statement in Go, `alts!` in Clojure
+(currently, only reads are supported)
+
+- Cancellation of reads using `AbortSignal`, see `select()`
 
 - Some useful operators: `merge()`, `partitionTime()`, `timeout()`
 
