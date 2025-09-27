@@ -3,8 +3,8 @@ CSP-style channels for TypeScript with `async`/`await`
 - Communicating Sequential Processes
 - Go channels
 - Clojure's `core.async`
-- [@thi.ng/csp](https://thi.ng/csp) - for `read()` and `tryRead()` return types which 
-avoid extra allocations
+- [@thi.ng/csp](https://thi.ng/csp) - idea of return types of `read()` and `tryRead()` 
+that avoid extra allocations
 
 ### Install
 
@@ -25,6 +25,7 @@ while respecting backpressure. No more callback hell
 - Some useful operators: `merge()`, `partitionTime()`, `timeout()`
 
 - Focus on TS ergonomics: strict types, inferred nicely when possible
+(e.g. see return type of `select()`)
 
 - Works in Node.js and browsers; relies on global `setTimeout`, `AbortController`
 
@@ -45,6 +46,5 @@ See `src/_examples` directory:
   
 - [Fan-out, fan-in](./src/_examples/fan-out-fan-in.ts): a common pattern to distribute work among N workers and merge results back
 
-- [Batch processing](./src/_examples/batch-processing.ts): read channel in 
-batches of size N, processing one batch at a time - useful for e.g. saving
-data in DB with better throughput
+- [Batch processing](./src/_examples/batch-processing.ts): use of `partitionTime()`: 
+process channel in groups of N items. Useful e.g. to save data in DB in batches
