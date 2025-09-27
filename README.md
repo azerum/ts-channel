@@ -1,4 +1,4 @@
-CSP-style channels for TypeScript with `async`/`await`
+CSP-style channels for TypeScript with `async`/`await`. Inspired by:
 
 - Communicating Sequential Processes
 - Go channels
