@@ -23,7 +23,7 @@ export type SelectResult<T extends NotUndefined> =
  * 
  * - Only the selected channel will be read from. Values of other channels will
  * remain intact (`Promise.race` example would read from all channels and 
- * discards other values)
+ * discard other values)
  * 
  * - `select()` tries to be fair: if multiple channels have a value, one is 
  * selected at random (`Promise.race` would always select the one earlier in 
