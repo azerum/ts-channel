@@ -1,10 +1,10 @@
+import { FifoRingBuffer } from './_FifoRingBuffer.js'
 import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
 import { CannotWriteIntoClosedChannel, type ReadableChannel, type WritableChannel } from './channel-api.js'
 
 export class Channel<T extends {} | null> implements ReadableChannel<T>, WritableChannel<T> {
-    // TODO: this should be a ring buffer
-    private readonly buffer: T[] = []
+    private readonly buffer: FifoRingBuffer<T>
 
     // TODO?: those could be deques
     private blockedWrites: BlockedWrite<T>[] = []
@@ -20,8 +20,7 @@ export class Channel<T extends {} | null> implements ReadableChannel<T>, Writabl
      * blocks until {@link ReadableChannel.read} and vice versa
      */
     constructor(readonly capacity: number) {
-        if (!Number.isInteger(capacity) || capacity < 0)
-            throw new Error(`capacity must be an integer >= 0. Got: ${capacity}`)
+        this.buffer = new FifoRingBuffer(capacity)
     }
 
     get closed() {
@@ -50,8 +49,9 @@ export class Channel<T extends {} | null> implements ReadableChannel<T>, Writabl
 
         this.resolveSomeReadableWait()
 
-        if (this.buffer.length < this.capacity) {
-            this.buffer.push(value)
+        const didWrite = this.buffer.write(value)
+
+        if (didWrite) {
             return
         }
 
@@ -77,26 +77,41 @@ export class Channel<T extends {} | null> implements ReadableChannel<T>, Writabl
     }
 
     tryRead(): T | undefined {
-        // First, unblock any blocked write()
+        // In unbuffered channel, buffer is always empty and we should read
+        // value from the first blocked write
         // 
-        // If this channel is unbuffered, this happens because this tryRead() call 
-        // will get the write() value
-        //
-        // If this channel is buffered, this happens because this tryRead() call
-        // will free 1 position in the buffer, and any blocked write() should 
-        // fill it in
+        // In buffered channel, blocked writes are possible only if the buffer is
+        // full. We always read value from the buffer, then resolve any blocked
+        // write and put its value in the buffer
+
+        if (this.capacity === 0) {
+            const write = this.blockedWrites.shift()
+
+            if (write === undefined) {
+                return undefined
+            }
+
+            write.resolve()
+            return write.value
+        }
+
+        const value = this.buffer.read()
+
+        if (value === undefined) {
+            return undefined
+        }
+
         const write = this.blockedWrites.shift()
 
         if (write !== undefined) {
-            // This value will be consumed right away by .shift() below. So 
-            // if this channel is unbuffered, the buffer will be empty by the
-            // end of the call
-            this.buffer.push(write.value)
+            // `write()` always returns `true` here, as we've just done 
+            // `read()` above, freeing space for at least 1 element
+            this.buffer.write(write.value)
 
             write.resolve()
         }
 
-        return this.buffer.shift()
+        return value
     }
 
     waitUntilReadable<const U>(value: U, signal?: AbortSignal): Promise<U> {
