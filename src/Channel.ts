@@ -6,7 +6,7 @@ import { CannotWriteIntoClosedChannel, type ReadableChannel, type WritableChanne
 export class Channel<T extends {} | null> implements ReadableChannel<T>, WritableChannel<T> {
     private readonly buffer: FifoRingBuffer<T>
 
-    // TODO?: those could be deques
+    // TODO?: those could be queues
     private blockedWrites: BlockedWrite<T>[] = []
     private blockedReads: ResolveReadFn<T>[] = []
 
