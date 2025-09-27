@@ -1,5 +1,5 @@
 {
-    "name": "@azerum/channel",
+    "name": "@azerum/ts-csp",
     "version": "0.0.1",
     "type": "module",
     "main": "./out/index.js",

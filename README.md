@@ -32,7 +32,7 @@ while respecting backpressure. No more callback hell
 
 - Thoroughly tested
 
-[API docs](https://azerum.github.io/ts-channel) describe what each method
+[API docs](https://azerum.github.io/ts-csp) describe what each method
 on `Channel` does and more
 
 ### Examples
