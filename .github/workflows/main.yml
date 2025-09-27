@@ -5,14 +5,15 @@ on:
     branches:
       - main
 
-    # Rebuild docs only when public API docs may change: on changes of code,
-    # TS settings, dependencies, Node.js version
+    # Rebuild docs only for changes that can affect TypeDoc output: code,
+    # TS settings, dependencies, Node.js version, README.md
     paths:
       - 'src/**'
       - 'tsconfig.*.json'
       - package.json
       - pnpm-lock.yaml
       - .nvmrc
+      - README.md
 
 permissions:
   pages: write
