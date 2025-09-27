@@ -5,6 +5,15 @@ on:
     branches:
       - main
 
+    # Rebuild docs only when public API docs may change: on changes of code,
+    # TS settings, dependencies, Node.js version
+    paths:
+      - 'src/**'
+      - 'tsconfig.*.json'
+      - package.json
+      - pnpm-lock.yaml
+      - .nvmrc
+
 permissions:
   pages: write
 
