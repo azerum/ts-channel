@@ -3,6 +3,13 @@ import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
 import { CannotWriteIntoClosedChannel, type ReadableChannel, type WritableChannel } from './channel-api.js'
 
+/**
+ * See methods of {@link ReadableChannel} and {@link WritableChannel}
+ * for details
+ * 
+ * Note that `undefined` cannot be put into the channel, as `undefined` is 
+ * used as a special value by {@link ReadableChannel.read}
+ */
 export class Channel<T extends {} | null> implements ReadableChannel<T>, WritableChannel<T> {
     private readonly buffer: FifoRingBuffer<T>
 
