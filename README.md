@@ -26,8 +26,8 @@ while respecting backpressure. No more callback hell
 
 - Some useful operators: `merge()`, `partitionTime()`, `timeout()`
 
-- Focus on TS ergonomics: strict types, inferred nicely when possible
-(e.g. see return type of `select()`)
+- Focus on type safety (e.g. see `NotUndefined` type) and TS ergonomics
+(e.g. see how `select()` infers the return type)
 
 - Works in Node.js and browsers; relies on global `setTimeout`, `AbortController`
 
@@ -35,7 +35,7 @@ while respecting backpressure. No more callback hell
 
 - Thoroughly tested
 
-[API docs](https://azerum.github.io/ts-csp) describe what each method
+[API docs](https://azerum.github.io/ts-csp/classes/Channel) describe what each method
 on `Channel` does and more
 
 ### Examples
