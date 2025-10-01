@@ -22,7 +22,7 @@ export interface HasClosed {
  * Channel that can be read from. Implements `AsyncIterable`, hence can be
  * used with `for await` loop
  */
-export interface ReadableChannel<out T extends NotUndefined> extends HasClosed, AsyncIterable<T> {
+export interface ReadableChannel<T extends NotUndefined> extends HasClosed, AsyncIterable<T> {
     /**
      * Reads a value from the channel. If there are no values, blocks until
      * there is
@@ -79,7 +79,7 @@ export interface ReadableChannel<out T extends NotUndefined> extends HasClosed, 
 /**
  * Channel that can be written into
  */
-export interface WritableChannel<in T extends NotUndefined> extends HasClosed {
+export interface WritableChannel<T extends NotUndefined> extends HasClosed {
     /**
      * Writes value to the channel. If there is no free space in the channel,
      * blocks until there is. This gives backpressure: if writer is faster than 
