@@ -1,16 +1,18 @@
 import { FifoRingBuffer } from './_FifoRingBuffer.js'
 import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
-import { CannotWriteIntoClosedChannel, type ReadableChannel, type WritableChannel } from './channel-api.js'
+import { CannotWriteIntoClosedChannel, type NotUndefined, type ReadableChannel, type WritableChannel } from './channel-api.js'
 
 /**
- * See methods of {@link ReadableChannel} and {@link WritableChannel}
- * for details
+ * Implementation of buffered and unbuffered channel, depending on the constructor 
+ * parameter
  * 
- * Note that `undefined` cannot be put into the channel, as `undefined` is 
- * used as a special value by {@link ReadableChannel.read}
+ * For details, see the methods of {@link ReadableChannel} and {@link WritableChannel}
+ * 
+ * Note that `T extends NotUndefined`. See {@link NotUndefined} docs for the
+ * explanation
  */
-export class Channel<T extends {} | null> implements ReadableChannel<T>, WritableChannel<T> {
+export class Channel<T extends NotUndefined> implements ReadableChannel<T>, WritableChannel<T> {
     private readonly buffer: FifoRingBuffer<T>
 
     // TODO?: those could be queues

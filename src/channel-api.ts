@@ -1,8 +1,28 @@
 import { NamedError } from './_NamedError.js'
 
+/**
+ * `undefined` cannot be written into channels as {@link ReadableChannel.read}
+ * uses `undefined` as a special value. That's why channel interfaces have 
+ * `T extends NotUndefined` constraint
+ * 
+ * `null` is allowed
+ */
 export type NotUndefined = {} | null
 
-export interface BaseReadableChannel<out T extends NotUndefined> {
+export interface HasClosed {
+    /**
+     * Returns `true` after {@link WritableChannel.close} was called on the channel.
+     * See {@link WritableChannel.close} for the explanation of what are closed
+     * channels
+     */
+    get closed(): boolean
+}
+
+/**
+ * Channel that can be read from. Implements `AsyncIterable`, hence can be
+ * used with `for await` loop
+ */
+export interface ReadableChannel<out T extends NotUndefined> extends HasClosed, AsyncIterable<T> {
     /**
      * Reads a value from the channel. If there are no values, blocks until
      * there is
@@ -25,13 +45,9 @@ export interface BaseReadableChannel<out T extends NotUndefined> {
      * or a finite number of reads, so this should not be a problem
      */
     read: () => Promise<T | undefined>
-}
-
-export interface ReadableChannel<out T extends NotUndefined> extends BaseReadableChannel<T>, AsyncIterable<T> {
-    get closed(): boolean
 
     /**
-     * Non-blocking version of {@link BaseReadableChannel.read}. Unlike 
+     * Non-blocking version of {@link ReadableChannel.read}. Unlike 
      * {@link ReadableChannel.read}, if channel has no values, returns `undefined`
      * 
      * This means `undefined` is returned in two cases: (1) the channel is open
@@ -60,9 +76,10 @@ export interface ReadableChannel<out T extends NotUndefined> extends BaseReadabl
     waitUntilReadable: <const T>(value: T, signal?: AbortSignal) => Promise<T>
 }
 
-export interface WritableChannel<in T extends NotUndefined> {
-    get closed(): boolean
-
+/**
+ * Channel that can be written into
+ */
+export interface WritableChannel<in T extends NotUndefined> extends HasClosed {
     /**
      * Writes value to the channel. If there is no free space in the channel,
      * blocks until there is. This gives backpressure: if writer is faster than 

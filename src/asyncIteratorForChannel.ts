@@ -1,7 +1,7 @@
-import { type BaseReadableChannel, type NotUndefined } from './channel-api.js'
+import { type NotUndefined, type ReadableChannel } from './channel-api.js'
 
 export function asyncIteratorForChannel<T extends NotUndefined>(
-    channel: BaseReadableChannel<T>
+    channel: Pick<ReadableChannel<T>, 'read'>
 ): AsyncIterator<T> {
     return {
         async next() {
