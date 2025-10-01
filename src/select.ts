@@ -4,7 +4,7 @@ import { makeAbortSignal } from './_makeAbortSignal.js'
 import type { NonEmptyArray } from './NonEmptyArray.js'
 
 /**
- * @internal Internal helper: might be removed without notice
+ * @internal Internal helper: can be removed without notice
  */
 export type InferSelectResult<TArgs> = 
     TArgs extends ReadableChannel<infer U>[]

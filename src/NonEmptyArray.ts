@@ -1,4 +1,4 @@
 /**
- * @internal Internal helper: might be removed without notice
+ * @internal Internal helper: can be removed without notice
  */
 export type NonEmptyArray<T> = [T, ...T[]]
