@@ -12,6 +12,10 @@ that avoid extra allocations
 npm install @azerum/ts-csp
 ```
 
+### Stability
+
+Experimental: breaking changes to API are expected
+
 ### Features
 
 - Write familiar procedural code with `async`/`await` to process streams of data,
