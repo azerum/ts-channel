@@ -127,12 +127,12 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
         return new AbortablePromise(resolve => {
             if (this._closed) {
                 resolve(value)
-                return noop
+                return null
             }
 
             if (this.buffer.length > 0 || this.blockedWrites.length > 0) {
                 resolve(value)
-                return noop
+                return null
             }
 
             const resolveFn = () => resolve(value)
@@ -199,5 +199,3 @@ interface BlockedWrite<T> {
 }
 
 type ResolveReadFn<T> = (result: T | undefined) => void
-
-const noop = () => {}

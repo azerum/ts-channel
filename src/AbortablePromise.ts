@@ -52,7 +52,7 @@ export class AbortablePromise<T> extends Promise<T> {
         executor: (
             resolve: (value: T) => void, 
             reject: (exception: unknown) => void
-        ) => (() => void),
+        ) => (() => void) | null,
         
         signal?: AbortSignal
     ) {
@@ -79,7 +79,7 @@ export class AbortablePromise<T> extends Promise<T> {
         const abortListener = () => {
             if (!this.hasSettled) {
                 rejectAndRemoveListener(new AbortedError())
-                cleanupOnAborted()
+                cleanupOnAborted?.call(undefined)
             }
         }
 
