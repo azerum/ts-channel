@@ -3,7 +3,7 @@ import { expect } from 'vitest'
 /**
  * Asserts that `promise` does not settle. Warning: only works for 
  * very particular promises, like ones created by {@link Channel}. Used by `Channel`
- * tests. See comments in the code
+ * tests. See comments inside the implementation for details
  */
 export async function expectToBlock(promise: Promise<unknown>) {
     // How to test if a promise does not settle? In general it is not possible -
