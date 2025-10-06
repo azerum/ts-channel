@@ -114,6 +114,13 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
     write: (value: T) => Promise<void>
 
     /**
+     * Non-blocking version of {@link WritableChannel.write}. Writes the value
+     * only if the channel is "writable" (see {@link WritableChannel.waitUntilWritable}
+     * for the definition). Returns `true` if successful
+     */ 
+    tryWrite: (value: T) => boolean
+
+    /**
      * Closes the channel. Closed channels cannot be written to. They can
      * still be read from if there are values left in the buffer
      * 

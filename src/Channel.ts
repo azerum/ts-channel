@@ -16,7 +16,6 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
     private readonly buffer: FifoRingBuffer<T>
 
     // TODO?: those could be queues
-
     private blockedWrites: BlockedWrite<T>[] = []
     private blockedReads: ResolveReadFn<T>[] = []
 
@@ -51,24 +50,11 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
     }
 
     async write(value: T): Promise<void> {
-        if (value === undefined) {
-            throw new Error(`Writing \`undefined\` into channel is not allowed`)
-        }
-
         if (this._closed) {
             throw new CannotWriteIntoClosedChannel()
         }
 
-        const readToResolve = this.blockedReads.shift()
-
-        if (readToResolve !== undefined) {
-            readToResolve(value)
-            return
-        }
-
-        this.resolveSomeReadableWait()
-
-        const didWrite = this.buffer.write(value)
+        const didWrite = this.tryWrite(value)
 
         if (didWrite) {
             return
@@ -77,6 +63,27 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
         return new Promise((resolve, reject) => {
             this.blockedWrites.push({ value, resolve, reject })
         })
+    }
+
+    tryWrite(value: T): boolean {
+       if (value === undefined) {
+            throw new Error(`Writing \`undefined\` into channel is not allowed`)
+        }
+
+        if (this._closed) {
+            return false
+        }
+
+        const readToResolve = this.blockedReads.shift()
+
+        if (readToResolve !== undefined) {
+            readToResolve(value)
+            return true
+        }
+
+        this.resolveSomeReadableWait()
+
+        return this.buffer.write(value)
     }
 
     async read(): Promise<T | undefined> {

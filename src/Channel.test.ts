@@ -63,6 +63,21 @@ describe('Unbuffered', () => {
         await w
     })
 
+    test('If there is no blocked read(), tryWrite() returns false', async () => {
+        const ch = new Channel(0)
+        expect(ch.tryWrite(42)).toBe(false)
+    })
+
+    test('If there is a blocked read(), tryWrite() unblocks it', async () => {
+        const ch = new Channel(0)
+
+        const r = ch.read()
+        await expectToBlock(r)
+
+        expect(ch.tryWrite(42)).toBe(true)
+        await expect(r).resolves.toBe(42)
+    })
+
     test('waitUntilReadable() blocks until there is a blocked write', async () => {
         const ch = new Channel(0)
 
@@ -107,11 +122,18 @@ describe('Unbuffered', () => {
         await expect(Promise.all(reads)).resolves.toEqual([undefined, undefined])
     })
 
-    test('After close(), tryRead()s return undefined', async () => {
+    test('After close(), tryRead()s return undefined', () => {
         const ch = new Channel(0)
 
         ch.close()
         expect(ch.tryRead()).toBe(undefined)
+    })
+
+    test('After close(), tryWrite()s return false', () => {
+        const ch = new Channel(0)
+
+        ch.close()
+        expect(ch.tryWrite(42)).toBe(false)
     })
 })
 
@@ -123,6 +145,15 @@ describe('Buffered', () => {
         await ch.write(2)
         await ch.write(3)
         await expectToBlock(ch.write(4))
+    })
+
+    test('tryWrite() writes value and returns true until the buffer is full', async () => {
+        const ch = new Channel(3)
+
+        expect(ch.tryWrite(1)).toBe(true)
+        expect(ch.tryWrite(2)).toBe(true)
+        expect(ch.tryWrite(3)).toBe(true)
+        expect(ch.tryWrite(4)).toBe(false)
     })
 
     test('If buffer is not empty, read()/tryRead() take values from it', async () => {
@@ -468,6 +499,12 @@ test('Writing `undefined` into channel is not allowed', async () => {
     const w = ch.write(undefined)
 
     await expect(w).rejects.toThrowError()
+
+    expect(() => {
+        //@ts-expect-error Same as above
+        ch.tryWrite(undefined)
+    })
+    .toThrowError()
 })
 
 test(
@@ -483,3 +520,13 @@ test(
         await expect(ch.read()).resolves.toBe(2)
     }
 )
+
+test('If tryWrite(b) is made after tryWrite(a), a will be read before b', async () => {
+    const ch = new Channel(10)
+
+    ch.tryWrite(1)
+    ch.tryWrite(2)
+
+    await expect(ch.read()).resolves.toBe(1)
+    await expect(ch.read()).resolves.toBe(2)
+})
