@@ -60,9 +60,9 @@ export interface ReadableChannel<T extends NotUndefined> extends HasClosed, Asyn
      * Blocks until the channel is "readable", meaning that it either:
      * 
      * - Has a value (value in the buffer or a blocked {@link WritableChannel.write} call)
-     * - Is closed and has no values 
+     * - Is closed
      * 
-     * Intuitively, when a channel is "readable", the next 
+     * Intuitively, a channel is "readable", when the next 
      * {@link ReadableChannel.read} call on it will not block
      * 
      * > Note: in combination with {@link ReadableChannel.tryRead}, used to 
@@ -73,7 +73,13 @@ export interface ReadableChannel<T extends NotUndefined> extends HasClosed, Asyn
      * @param signal Use the signal to cancel the wait. This frees up memory
      * occupied by it. After cancelling, the wait will throw {@link AbortedError}
      */
-    waitUntilReadable: <const T>(value: T, signal?: AbortSignal) => Promise<T>
+    waitUntilReadable: <const R>(value: R, signal?: AbortSignal) => Promise<R>
+
+    /**
+     * Returns the number of currently blocked {@link ReadableChannel.waitUntilReadable}
+     * calls
+     */
+    get readableWaitsCount(): number
 }
 
 /**
@@ -125,6 +131,29 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
      * Unlike in Go, this method is safe to call multiple times (idempotent)
      */
     close: () => void
+
+    /**
+     * Blocks until the channel is "writable", meaning that it either:
+     * 
+     * - Is closed
+     * - Has a free space in the buffer
+     * - Has a blocked {@link ReadableChannel.read} call
+     * 
+     * Intuitively, a channel is "writable", when the next 
+     * {@link ReadableChannel.write} call on it will not block
+     * 
+     * @param value Specify value that will be returned once the wait unblocks
+     * 
+     * @param signal Use the signal to cancel the wait. This frees up memory
+     * occupied by it. After cancelling, the wait will throw {@link AbortedError}
+     */
+    waitUntilWritable: <const R>(value: R, signal?: AbortSignal) => Promise<R>
+
+    /**
+     * Returns the number of currently blocked {@link WritableChannel.waitUntilWritable}
+     * calls
+     */
+    get writableWaitsCount(): number
 }
 
 export class CannotWriteIntoClosedChannel extends NamedError {}

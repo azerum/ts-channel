@@ -16,10 +16,12 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
     private readonly buffer: FifoRingBuffer<T>
 
     // TODO?: those could be queues
+
     private blockedWrites: BlockedWrite<T>[] = []
     private blockedReads: ResolveReadFn<T>[] = []
 
-    private readonly blockedReadableWaits = new Set<() => void>()
+    private readonly readableWaits = new Set<() => void>()
+    private readonly writableWaits = new Set<() => void>()
 
     private _closed = false
 
@@ -34,6 +36,14 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
 
     get closed() {
         return this._closed
+    }
+
+    get readableWaitsCount() {
+        return this.readableWaits.size
+    }
+
+    get writableWaitsCount() {
+        return this.writableWaits.size
     }
 
     [Symbol.asyncIterator]() {
@@ -72,13 +82,11 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
     async read(): Promise<T | undefined> {
         const result = this.tryRead()
 
-        if (result !== undefined) {
+        if (result !== undefined || this._closed) {
             return result
         }
 
-        if (this._closed) {
-            return undefined
-        } 
+        this.resolveSomeWritableWait()
 
         return new Promise(resolve => {
             this.blockedReads.push(resolve)
@@ -112,18 +120,24 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
 
         const write = this.blockedWrites.shift()
 
-        if (write !== undefined) {
+        if (write === undefined) {
+            // A space in the buffer was freed, and there are no blocked
+            // writes. If one writable wait if there are any
+
+            this.resolveSomeWritableWait()
+        }
+        else {
             // `write()` always returns `true` here, as we've just done 
             // `read()` above, freeing space for at least 1 element
             this.buffer.write(write.value)
-
+    
             write.resolve()
         }
 
         return value
     }
 
-    waitUntilReadable<const U>(value: U, signal?: AbortSignal): Promise<U> {
+    waitUntilReadable<const R>(value: R, signal?: AbortSignal): Promise<R> {
         return new AbortablePromise(resolve => {
             if (this._closed) {
                 resolve(value)
@@ -136,10 +150,31 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
             }
 
             const resolveFn = () => resolve(value)
-            this.blockedReadableWaits.add(resolveFn)
+            this.readableWaits.add(resolveFn)
 
             return () => {
-                this.blockedReadableWaits.delete(resolveFn)
+                this.readableWaits.delete(resolveFn)
+            }
+        }, signal)
+    }
+
+    async waitUntilWritable<const R>(value: R, signal?: AbortSignal): Promise<R> {
+        return new AbortablePromise(resolve => {
+            if (this._closed) {
+                resolve(value)
+                return null
+            }
+
+            if (this.buffer.length < this.capacity || this.blockedReads.length > 0) {
+                resolve(value)
+                return null
+            }
+
+            const resolveFn = () => resolve(value)
+            this.writableWaits.add(resolveFn)
+
+            return () => {
+                this.writableWaits.delete(resolveFn)
             }
         }, signal)
     }
@@ -153,7 +188,7 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
 
         this.resolveAllReadsWithUndefined()
         this.rejectAllWrites()
-        this.resolveAllReadableWaits()
+        this.resolveAllWaits()
     }
 
     private resolveAllReadsWithUndefined() {
@@ -174,21 +209,36 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
         this.blockedWrites = []
     }
 
-    private resolveSomeReadableWait() {
-        const { value: first } = this.blockedReadableWaits[Symbol.iterator]().next()
-
-        if (first !== undefined) {
-            first()
-            this.blockedReadableWaits.delete(first)
-        }
-    }
-
-    private resolveAllReadableWaits() {
-        for (const resolve of this.blockedReadableWaits) {
+    private resolveAllWaits() {
+        for (const resolve of this.readableWaits) {
             resolve()
         }
 
-        this.blockedReadableWaits.clear()
+        this.readableWaits.clear()
+
+        for (const resolve of this.writableWaits) {
+            resolve()
+        }
+    
+        this.writableWaits.clear()
+    }
+
+    private resolveSomeReadableWait() {
+        const { value: first } = this.readableWaits[Symbol.iterator]().next()
+
+        if (first !== undefined) {
+            first()
+            this.readableWaits.delete(first)
+        }
+    }
+
+    private resolveSomeWritableWait() {
+        const { value: first } = this.writableWaits[Symbol.iterator]().next()
+
+        if (first !== undefined) {
+            first()
+            this.writableWaits.delete(first)
+        }
     }
 }
 
