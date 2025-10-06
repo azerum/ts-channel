@@ -68,7 +68,7 @@ export async function select<
     const [usedSignal, abort] = makeAbortSignal(signal)
 
     const promises = channels.map(
-        (ch, index) => ch.waitUntilReadable(index, usedSignal)
+        ch => ch.waitUntilReadable(ch, usedSignal)
     )
     
     while (true) {
@@ -76,9 +76,11 @@ export async function select<
         // that Promise.race() picks the first settled promise
         shuffle(promises)
 
-        const winnerIndex = await Promise.race(promises)
-        const ch = channels[winnerIndex]!
+        const winner = await Promise.race(
+            promises.map((p, index) => p.then(r => [r, index] as const))
+        )
 
+        const [ch, index] = winner
         const result = ch.tryRead()
 
         if (result !== undefined || ch.closed) {
@@ -88,6 +90,6 @@ export async function select<
             return [ch, result]
         }
 
-        promises[winnerIndex] = ch.waitUntilReadable(winnerIndex, usedSignal)
+        promises[index] = ch.waitUntilReadable(ch, usedSignal)
     }
 }
