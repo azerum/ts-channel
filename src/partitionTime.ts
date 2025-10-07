@@ -1,8 +1,6 @@
 import type { NotUndefined, ReadableChannel } from './channel-api.js'
 import { raceTimeout, select } from './select.js'
 
-type NonEmptyArray<T> = [T, ...T[]]
-
 /**
  * Reads from `source` channel in groups of size `groupSize`. However, if more
  * than `nextValueTimeoutMs` elapse since the last read from `source`, yields
@@ -62,7 +60,7 @@ export async function* partitionTime<T extends NotUndefined>(
     source: ReadableChannel<T>,
     groupSize: number,
     nextValueTimeoutMs: number,
-): AsyncIterable<NonEmptyArray<T>> {
+): AsyncIterable<[T, ...T[]]> {
     if (!Number.isInteger(groupSize) || groupSize < 1) {
         throw new Error(`groupSize must be an integer >= 1. Got: ${groupSize}`)
     }
@@ -80,7 +78,7 @@ export async function* partitionTime<T extends NotUndefined>(
     }
 
     async function collectGroup(first: T): Promise<[T, ...T[]]> {
-        const group: NonEmptyArray<T> = [first]
+        const group: [T, ...T[]] = [first]
         
         while (group.length < groupSize) {
             const winner = await select({
