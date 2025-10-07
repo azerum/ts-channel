@@ -149,7 +149,7 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
      * - Has a blocked {@link ReadableChannel.read} call
      * 
      * Intuitively, a channel is "writable", when the next 
-     * {@link ReadableChannel.write} call on it will not block
+     * {@link WritableChannel.write} call on it will not block
      * 
      * @param value Specify value that will be returned once the wait unblocks
      * 
