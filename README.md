@@ -23,14 +23,10 @@ while respecting backpressure. No more callback hell
 
 - Buffered and unbuffered channels
 
-- `select()` function similar to `select{}` statement in Go, `alts!` in Clojure,
-with support of reads and writes
-
-- Timeout and cancellation of reads with `select()` + `raceTimeout()` / `raceAbortSignal()`
+- `select()` function similar to `select{}` statement in Go, with support of reads and writes. Cancellation by timeout/AbortSignal via `raceTimeout()` / `raceAbortSignal()`.
+Nicely inferred return type
 
 - Some useful operators: `merge()`, `partitionTime()`
-
-- TS ergonomics: types are strict and inferred when possible (e.g. see `select()`)
 
 - Works in Node.js and browsers; relies on global `setTimeout`, `AbortController`
 
