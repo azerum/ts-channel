@@ -26,10 +26,10 @@ type InferSelectablePromiseType<T> =
 /**
  * ### Overview
  * 
- * Similar to `select {}` statement in Go and `alts!` in Clojure `core.async`:
- * tries to perform multiple reads/writes at once. The first read/write that 
- * can be performed wins the race. The remaining operations are cancelled, in
- * such way that channels remain intact (no values read from/written into them)
+ * Similar to `select {}` statement in Go`: tries to perform multiple reads/writes 
+ * at once. The first read/write that  can be performed wins the race. The 
+ * remaining operations are cancelled in such way that channels remain intact 
+ * (no values read from/written into them)
  * 
  * If multiple operations can be performed simultaneously (e.g. if you 
  * try to perform read on two non-empty channels), one operation is selected
