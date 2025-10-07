@@ -530,3 +530,28 @@ test('If tryWrite(b) is made after tryWrite(a), a will be read before b', async 
     await expect(ch.read()).resolves.toBe(1)
     await expect(ch.read()).resolves.toBe(2)
 })
+
+test('Channel is an AsyncIterable that reads values', async () => {
+    const ch = new Channel<number>(3)
+
+    async function writer() {
+        for (let i = 0; i < 3; ++i) {
+            await ch.write(i)
+        }
+
+        ch.close()
+    }
+
+    async function reader() {
+        const collectedValues: number[] = []
+
+        for await (const x of ch) {
+            collectedValues.push(x)
+        }
+
+        return collectedValues
+    }
+
+    const [collectedValues, _] = await Promise.all([reader(), writer()])
+    expect(collectedValues).toEqual([0, 1, 2])
+})
