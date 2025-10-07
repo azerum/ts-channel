@@ -21,17 +21,16 @@ Experimental: breaking changes to API are expected
 - Write familiar procedural code with `async`/`await` to process streams of data,
 while respecting backpressure. No more callback hell
 
-- Buffered & unbuffered channels
+- Buffered and unbuffered channels
 
-- `select()` function similar to `select{}` statement in Go, `alts!` in Clojure
-(currently, only reads are supported)
+- `select()` function similar to `select{}` statement in Go, `alts!` in Clojure,
+with support of reads and writes
 
-- Cancellation of reads using `AbortSignal`, see `select()`
+- Timeout and cancellation of reads with `select()` + `raceTimeout()` / `raceAbortSignal()`
 
-- Some useful operators: `merge()`, `partitionTime()`, `timeout()`
+- Some useful operators: `merge()`, `partitionTime()`
 
-- Focus on type safety (e.g. see `NotUndefined` type) and TS ergonomics
-(e.g. see how `select()` infers the return type)
+- TS ergonomics: types are strict and inferred when possible (e.g. see `select()`)
 
 - Works in Node.js and browsers; relies on global `setTimeout`, `AbortController`
 
@@ -51,6 +50,8 @@ See `src/_examples` directory:
 - [Fast producer and slow consumer](./src/_examples/fast-producer-slow-consumer.ts): demonstrates how backpressure works
   
 - [Fan-out, fan-in](./src/_examples/fan-out-fan-in.ts): a common pattern to distribute work among N workers and merge results back
+
+- [Read from multiple channels with select](./src/_examples/select-read.ts)
 
 - [Batch processing](./src/_examples/batch-processing.ts): use of `partitionTime()`: 
 process channel in groups of N items. Useful e.g. to save data in DB in batches

@@ -65,9 +65,6 @@ export interface ReadableChannel<T extends NotUndefined> extends HasClosed, Asyn
      * Intuitively, a channel is "readable", when the next 
      * {@link ReadableChannel.read} call on it will not block
      * 
-     * > Note: in combination with {@link ReadableChannel.tryRead}, used to 
-     * implement {@link select}
-     * 
      * @param value Specify value that will be returned once the wait unblocks
      * 
      * @param signal Use the signal to cancel the wait. This frees up memory
@@ -81,6 +78,9 @@ export interface ReadableChannel<T extends NotUndefined> extends HasClosed, Asyn
      */
     get readableWaitsCount(): number
 
+    /**
+     * Like {@link ReadableChannel.read}, but can be used with {@link select}
+     */
     raceRead: () => SelectablePromise<T | undefined>
 }
 
@@ -164,6 +164,9 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
      */
     get writableWaitsCount(): number
 
+    /**
+     * Like {@link WritableChannel.write}, but can be used with {@link select}
+     */
     raceWrite: (value: T) => SelectablePromise<void> 
 }
 
