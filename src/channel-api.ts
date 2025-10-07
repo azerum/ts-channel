@@ -80,6 +80,8 @@ export interface ReadableChannel<T extends NotUndefined> extends HasClosed, Asyn
      * calls
      */
     get readableWaitsCount(): number
+
+    raceRead: () => SelectablePromise<T | undefined>
 }
 
 /**
@@ -161,6 +163,19 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
      * calls
      */
     get writableWaitsCount(): number
+
+    raceWrite: (value: T) => SelectablePromise<void> 
 }
 
 export class CannotWriteIntoClosedChannel extends NamedError {}
+
+/**
+ * Promise that can be used with {@link select}. Consists of two parts:
+ * first waits until operation can be done (e.g. {@link WritableChannel.write}
+ * waiting for free space in the buffer), second attempts to perform the operation,
+ * which may fail due to some race conditions
+ */
+export interface SelectablePromise<T> {
+    wait: <const R>(value: R, signal?: AbortSignal) => Promise<R>
+    attempt: () => [true, T] | [false]
+}

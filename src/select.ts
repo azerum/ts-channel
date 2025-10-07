@@ -1,95 +1,103 @@
 import { shuffle } from './_fisherYatesShuffle.js'
-import type { NotUndefined, ReadableChannel } from './channel-api.js'
-import { makeAbortSignal } from './_makeAbortSignal.js'
-import type { NonEmptyArray } from './NonEmptyArray.js'
+import { AbortablePromise } from './AbortablePromise.js'
+import type { ReadableChannel, SelectablePromise } from './channel-api.js'
+import { Channel } from './Channel.js'
 
-/**
- * @internal Internal helper: can be removed without notice
- */
-export type InferSelectResult<TArgs> = 
-    TArgs extends ReadableChannel<infer U>[]
-        ? SelectResult<U>
-        : never
+export type SelectArgsLike = Record<string, SelectablePromise<unknown>>
 
-export type SelectResult<T extends NotUndefined> = 
-    [ReadableChannel<T>, T | undefined]
+export interface SelectResultLike {
+    type: PropertyKey
+    value: unknown
+}
 
-/**
- * Like `select {}` statement in Go, or `alts!` statement from Clojure's 
- * `core.async`. Currently supports only reading, not writing
- * 
- * Allows to read from multiple channels at once, whichever has a value or 
- * closes first. This is similar to `Promise.race(channels.map(c => c.read()))`,
- * except:
- * 
- * - Only the selected channel will be read from. Values of other channels will
- * remain intact (`Promise.race` example would read from all channels and 
- * discard other values)
- * 
- * - `select()` tries to be fair: if multiple channels have a value, one is 
- * selected at random (`Promise.race` would always select the one earlier in 
- * the array). This is similar to behavior of Go's `select {}`
- * 
- * @param signal Optionally provide AbortSignal to cancel the call. Once
- * the signal is aborted, `select()` will throw {@link AbortedError}
- * and cancel all reads
- * 
- * @returns Tuple of `[channel, value]` - the selected channel and the value
- * read from it. `value` is `undefined` if the channel has closed
- * 
- * @example 
- * 
- * Read from `ch` or timeout:
- * 
- * ```ts
- * const [winnerCh, value] = await select([ch, timeout(1000)])
- * 
- * if (winnerCh !== ch) {
- *  // Timed out
- * }
- * ```
- * 
- * Read from `ch` or throw when `signal` is aborted:
- * 
- * ```ts
- * const [_, value] = await select([ch], signal)
- * ```
- */
-export async function select<
-    const TArgs extends NonEmptyArray<ReadableChannel<NotUndefined>>
->(
-    channels: TArgs,
-    signal?: AbortSignal
-): Promise<InferSelectResult<TArgs>> {
-    if (channels.length === 0) {
-        throw new Error('select() requires at least one channel')
+export type SelectResult<TArgs extends SelectArgsLike> = ({
+    [K in StringKeyof<TArgs>]: {
+        type: K
+        value: InferSelectablePromiseType<TArgs[K]>
     }
+})[StringKeyof<TArgs>]
 
-    const [usedSignal, abort] = makeAbortSignal(signal)
+type StringKeyof<T> = Extract<keyof T, string>
 
-    const promises = channels.map(
-        ch => ch.waitUntilReadable(ch, usedSignal)
-    )
+type InferSelectablePromiseType<T> = 
+    T extends SelectablePromise<infer U> 
+        ? U
+    : never
+
+export async function select<TArgs extends SelectArgsLike>(
+    args: TArgs
+): Promise<SelectResult<TArgs>> {
+    const c = new AbortController()
+
+    const promises = Object.entries(args).map((typeAndP) => {
+        const [_, p] = typeAndP
+        return p.wait(typeAndP, c.signal)
+    })
     
-    while (true) {
-        // Shuffle the array on every re-run to keep select() fair. Remember
-        // that Promise.race() picks the first settled promise
-        shuffle(promises)
-
-        const winner = await Promise.race(
-            promises.map((p, index) => p.then(r => [r, index] as const))
-        )
-
-        const [ch, index] = winner
-        const result = ch.tryRead()
-
-        if (result !== undefined || ch.closed) {
-            abort()
-            
-            //@ts-expect-error
-            return [ch, result]
+    try {
+        while (true) {
+            shuffle(promises)
+    
+            const [winner, index] = await Promise.race(
+                promises.map((p, index) => p.then(r => [r, index] as const))
+            )
+    
+            const [type, p] = winner
+            const maybeResult = p.attempt()
+    
+            if (maybeResult[0]) {
+                //@ts-expect-error
+                return {  
+                    type,
+                    value: maybeResult[1],
+                }
+            }
+    
+            promises[index] = p.wait(winner, c.signal)
         }
-
-        promises[index] = ch.waitUntilReadable(ch, usedSignal)
     }
+    finally {
+        c.abort()
+    }
+}
+
+export function returnOnAborted(signal: AbortSignal): SelectablePromise<unknown> {
+    return {
+        wait(value, cancelSignal) {
+            return new AbortablePromise(resolve => {
+                if (signal.aborted) {
+                    resolve(value)
+                    return null
+                }
+
+                const listener = () => resolve(value)
+                signal.addEventListener('abort', listener)
+
+                return () => {
+                    signal.removeEventListener('abort', listener)
+                }
+            }, cancelSignal)
+        },
+
+        attempt() {
+            if (signal.aborted) {
+                return [true, signal.reason]
+            }
+
+            return [false]
+        },
+    }
+}
+
+/**
+ * Returns a channel that closes after given time
+ */
+export function timeout(ms: number): ReadableChannel<never> {
+    const ch = new Channel<never>(0)
+
+    setTimeout(() => {
+        ch.close()
+    }, ms)
+
+    return ch
 }

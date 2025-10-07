@@ -1,7 +1,7 @@
-import type { NonEmptyArray } from './NonEmptyArray.js'
 import type { NotUndefined, ReadableChannel } from './channel-api.js'
-import { select } from './select.js'
-import { timeout } from './timeout.js'
+import { select, timeout } from './select.js'
+
+type NonEmptyArray<T> = [T, ...T[]]
 
 /**
  * Reads from `source` channel in groups of size `groupSize`. However, if more
@@ -83,17 +83,26 @@ export async function* partitionTime<T extends NotUndefined>(
         const group: NonEmptyArray<T> = [first]
         
         while (group.length < groupSize) {
-            const [_, result] = await select([
-                source,
-                timeout(nextValueTimeoutMs)
-            ])
+            const winner = await select({
+                value: source.raceRead(),
+                timeout: timeout(nextValueTimeoutMs).raceRead(),
+            })
 
-            // Either timed out or source has closed
-            if (result === undefined) {
-                return group
+            switch (winner.type) {
+                case 'value': {
+                    if (winner.value === undefined) {
+                        // source has closed
+                        return group
+                    }
+
+                    group.push(winner.value)
+                    continue
+                }
+
+                case 'timeout': {
+                    return group
+                }
             }
-
-            group.push(result)
         }
 
         return group
