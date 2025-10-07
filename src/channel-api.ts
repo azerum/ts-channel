@@ -171,9 +171,19 @@ export class CannotWriteIntoClosedChannel extends NamedError {}
 
 /**
  * Promise that can be used with {@link select}. Consists of two parts:
- * first waits until operation can be done (e.g. {@link WritableChannel.write}
- * waiting for free space in the buffer), second attempts to perform the operation,
- * which may fail due to some race conditions
+ * 
+ * - First waits until operation can be done (e.g. {@link WritableChannel.write}
+ * waiting for free space in the buffer)
+ * 
+ * - Second attempts to perform the operation, which may fail due to some race 
+ * conditions (e.g. after {@link WritableChannel.waitUntilWritable}, call to 
+ * {@link WritableChannel.tryWrite} may return false if some other write
+ * was performed in-between)
+ * 
+ * Implementors of the interface should follow the contract:
+ * 
+ * - {@link SelectablePromise.wait} should reject with an error 
+ * (preferably {@link AbortedError}) when the passed `signal` is aborted
  */
 export interface SelectablePromise<T> {
     wait: <const R>(value: R, signal?: AbortSignal) => Promise<R>
