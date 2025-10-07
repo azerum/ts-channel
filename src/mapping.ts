@@ -14,8 +14,23 @@ export function mapWritableChannel<T extends NotUndefined, R extends NotUndefine
         },
 
         async write(value) {
-            const result = fn(value)
-            await channel.write(result)
+            await channel.write(fn(value))
+        },
+
+        tryWrite(value) {
+            return channel.tryWrite(fn(value))
+        },
+
+        waitUntilWritable(value, signal) {
+            return channel.waitUntilWritable(value, signal)
+        },
+
+        get writableWaitsCount() {
+            return channel.writableWaitsCount
+        },
+
+        raceWrite(value) {
+            return channel.raceWrite(fn(value))
         },
 
         close() {
@@ -38,30 +53,44 @@ export function mapReadableChannel<T extends NotUndefined, R extends NotUndefine
 
         async read() {
             const value = await channel.read()
-
-            if (value === undefined) {
-                return undefined
-            }
-
-            return fn(value)
+            return value === undefined ? undefined : fn(value)
         },
 
         tryRead() {
             const value = channel.tryRead()
-            
-            if (value === undefined) {
-                return undefined
-            }
-
-            return fn(value)
-        },
-
-        [Symbol.asyncIterator]() {
-            return asyncIteratorForChannel(this)
+            return value === undefined ? undefined : fn(value)
         },
 
         waitUntilReadable(value, signal) {
             return channel.waitUntilReadable(value, signal)
+        },
+
+        get readableWaitsCount() {
+            return channel.readableWaitsCount
+        },
+
+        raceRead() {
+            const p = channel.raceRead()
+            
+            return {
+                wait(value, signal) {
+                    return p.wait(value, signal)
+                },
+
+                attempt() {
+                    const value = p.attempt()
+
+                    if (value[0]) {
+                        return [true, fn(value[1]!)]
+                    }
+
+                    return value
+                },
+            }
+        },
+
+        [Symbol.asyncIterator]() {
+            return asyncIteratorForChannel(this)
         },
     }
 }
