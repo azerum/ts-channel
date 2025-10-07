@@ -1,5 +1,5 @@
 import type { NotUndefined, ReadableChannel } from './channel-api.js'
-import { select, timeout } from './select.js'
+import { raceTimeout, select } from './select.js'
 
 type NonEmptyArray<T> = [T, ...T[]]
 
@@ -62,7 +62,7 @@ export async function* partitionTime<T extends NotUndefined>(
     source: ReadableChannel<T>,
     groupSize: number,
     nextValueTimeoutMs: number,
-): AsyncIterable<[T, ...T[]]> {
+): AsyncIterable<NonEmptyArray<T>> {
     if (!Number.isInteger(groupSize) || groupSize < 1) {
         throw new Error(`groupSize must be an integer >= 1. Got: ${groupSize}`)
     }
@@ -79,13 +79,13 @@ export async function* partitionTime<T extends NotUndefined>(
         yield group
     }
 
-    async function collectGroup(first: T): Promise<NonEmptyArray<T>> {
+    async function collectGroup(first: T): Promise<[T, ...T[]]> {
         const group: NonEmptyArray<T> = [first]
         
         while (group.length < groupSize) {
             const winner = await select({
                 value: source.raceRead(),
-                timeout: timeout(nextValueTimeoutMs).raceRead(),
+                timeout: raceTimeout(nextValueTimeoutMs),
             })
 
             switch (winner.type) {

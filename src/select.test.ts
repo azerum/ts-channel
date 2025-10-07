@@ -1,9 +1,14 @@
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { Channel } from './Channel.js'
-import { select } from './select.js'
+import { raceAbortSignal, raceNever, select } from './select.js'
 import { expectToBlock } from './_expectToBlock.js'
+import { abortListenersCount } from './_abortListenersCount.js'
 
-test('Racing reads and writes', async () => {
+test('Selecting reads and writes', async () => {
+    // When selecting multiple reads and writes:
+    // 1. Only one operation "wins the race" and completes
+    // 2. Other operations are not performed and leave their channels intact
+
     const ch1 = new Channel(0)
     const ch2 = new Channel(0)
     const ch3 = new Channel(0)
@@ -18,14 +23,16 @@ test('Racing reads and writes', async () => {
 
     await expectToBlock(s)
 
-    ch2.write(2)
+    const w2 = ch2.write(2)
     const r3 = ch3.read()
 
     await expect(s).resolves.toEqual({ type: 'ch2', value: 2 })
 
-    // Verify that other channels were not written to/read from
+    // Verify that write to ch2 succeeded, while other channels were not 
+    // written to/read from
 
     await expectToBlock(ch1.write(1))
+    await w2
     await expectToBlock(r3)
     await expectToBlock(ch4.read())
 })
@@ -37,6 +44,24 @@ test(
     async () => {
         const ch = new Channel(0)
 
+        // Edge case with the microtask queue:
+        //
+        // 1. select() starts waitUntilReadable()
+        // 2. A callback doing read() is added to the microtask queue
+        //
+        // 3. write() is performed. It resolves the waitUntilReadable() call,
+        // which causes continuation of select() (after await Promise.race())
+        // to be added to the microtask queue. Note that it is added after
+        // callback added in the step 2
+        //
+        // 4. Callback from step 2 runs. It consumes the performed write(),
+        // "stealing" the value from select()
+        //
+        // 5. select() continuation runs, but fails to read any value, as 
+        // channel is empty again
+        //
+        // select() must remain blocked in such case
+
         const s = select({ ch: ch.raceRead() })
         await expectToBlock(s)
 
@@ -45,18 +70,7 @@ test(
             expect(x).toBe(1)
         })
 
-        // This resolves the `waitForReadyReady()` used by `select()` under the 
-        // hood. The continuation of `select()` - code after `await` - is scheduled
-        // into microtask queue
-        //
-        // But there is another callback in the queue added above. It will "steal"
-        // the write, so once continuation of `select()` runs, it will get
-        // no value
-        //
-        // `select()` must not unblock in such case
-
         await ch.write(1)
-
         await expectToBlock(s)
     }
 )
@@ -69,6 +83,7 @@ test(
         const ch = new Channel(0)
 
         // Same principle as with test for edge case with reads:
+        //
         // 1. select() starts waitUntilWritable()
         // 2. read() is performed, it resolves the wait of the select
         // 3. Before continuation of select() is ran, write() is performed. 
@@ -87,5 +102,69 @@ test(
         expect(x).toBe(2)
 
         await expectToBlock(s)
+    }
+)
+
+test('select() correctly infers result type with raceNever', async () => {
+    const ch = new Channel<number>(0)
+
+    function example(condition: boolean) {
+        // The type of result of `op` here should be the same as in
+        // raceRead(). That is, raceNever must not affect the type
+        return select({
+            op: condition ? ch.raceRead() : raceNever,
+        })
+    }
+
+    type Actual = Awaited<ReturnType<typeof example>>
+    type Expected = { type: 'op', value: number | undefined }
+
+    assertIsSubtype<Actual, Expected>()
+    assertIsSubtype<Expected, Actual>()
+})
+
+function assertIsSubtype<_T extends S, S>() {}
+
+describe(
+    'raceAbortSignal() always removes any added listeners on the signal by ' + 
+    'the end of select()', 
+    
+    () => {
+        test('When signal is already aborted', async () => {
+            const c = new AbortController()
+
+            c.abort()
+
+            await select({ aborted: raceAbortSignal(c.signal) })
+            expect(abortListenersCount(c.signal)).toBe(0)
+        })
+
+        test('When signal is aborted asynchronously', async () => {
+            const c = new AbortController()
+
+            const s = select({ aborted: raceAbortSignal(c.signal) })
+            await expectToBlock(s)
+
+            c.abort()
+            await s
+            expect(abortListenersCount(c.signal)).toBe(0)
+        })
+
+        test('When other operation wins the race', async () => {
+            const c = new AbortController()
+
+            const ch = new Channel(0)
+
+            const s = select({ 
+                wrote: ch.raceWrite(1),
+                aborted: raceAbortSignal(c.signal) 
+            })
+
+            await expectToBlock(s)
+
+            await ch.read()
+            await s
+            expect(abortListenersCount(c.signal)).toBe(0)
+        })
     }
 )

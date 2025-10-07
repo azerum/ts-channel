@@ -4,7 +4,7 @@
  */
 
 import { Channel } from '../Channel.js'
-import { timeout } from '../timeout.js'
+import { setTimeout } from 'timers/promises'
 
 interface Ball {
     hits: number
@@ -32,7 +32,7 @@ async function player(table: Channel<Ball>, name: string) {
         ++ball.hits
         console.log(`${name} ${ball.hits}`)
 
-        await timeout(1000).read()
+        await setTimeout(1000)
         await table.write(ball)
     }
 }
@@ -43,7 +43,7 @@ async function playerWithForAwait(table: Channel<Ball>, name: string) {
         ++ball.hits
         console.log(`${name} ${ball.hits}`)
 
-        await timeout(1000).read()
+        await setTimeout(1000)
         await table.write(ball)
     }
 }
