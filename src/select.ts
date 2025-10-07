@@ -109,7 +109,6 @@ export async function select<TArgs extends SelectArgsLike>(
     }
 }
 
-
 /**
  * Returns a {@link SelectablePromise} that resolves once the passed signal aborts.
  * Meant to be used with {@link select}, to cancel reads/writes to channels
@@ -246,6 +245,40 @@ export function raceTimeout(ms: number): SelectablePromise<void> {
         },
     }
 }
+
+/**
+ * Experimental: use {@link select} with arbitrary async operations
+ * that can be cancelled via `AbortSignal`:
+ * 
+ * ```ts
+ * select({
+ *  didFetch: raceAsync(s => fetch('https://example.com', { signal: s })),
+ *  didRead: channel.raceRead(),
+ * })
+ * ```
+ */
+export function raceAsync<const T>(
+    fn: (signal?: AbortSignal) => Promise<T>
+): SelectablePromise<T> {
+    let result: T | typeof kNotDone = kNotDone
+
+    return {
+        async wait(value, signal) {
+            result = await fn(signal)
+            return value
+        },
+
+        attempt() {
+            if (result === kNotDone) {
+                return [false]
+            }
+
+            return [true, result]
+        },
+    }
+}
+
+const kNotDone = Symbol('kNotDone')
 
 /**
  * Type-level check that `value` is `never`. Useful for exhaustive
