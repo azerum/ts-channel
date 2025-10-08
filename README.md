@@ -9,7 +9,7 @@ that avoid extra allocations
 ### Install
 
 ```shell
-npm install @azerum/ts-csp
+npm install -E @azerum/ts-csp
 ```
 
 ### Stability
@@ -18,17 +18,21 @@ Experimental: breaking changes to API are expected
 
 ### Features
 
-- Write familiar procedural code with `async`/`await` to process streams of data,
-while respecting backpressure. No more callback hell
+- `async`/`await` for all blocking operations, `for await` support
 
-- Buffered and unbuffered channels
+- Buffered & unbuffered channels
 
-- `select()` function similar to `select{}` statement in Go, with support of reads and writes. Cancellation by timeout/AbortSignal via `raceTimeout()` / `raceAbortSignal()`.
-Nicely inferred return type
+- [`select()`](https://azerum.github.io/ts-csp/functions/select.html) function 
+similar to `select{}` statement in Go: reads & writes, timeout via 
+[`raceTimeout()`](https://azerum.github.io/ts-csp/functions/raceTimeout.html), 
+abort via [`raceAbortSignal()`](https://azerum.github.io/ts-csp/functions/raceAbortSignal.html), 
+inferred return type for exhaustive matching
 
-- Some useful operators: `merge()`, `partitionTime()`
+- Operators: [`merge()`](https://azerum.github.io/ts-csp/functions/merge.html),
+[`partitionTime()`](https://azerum.github.io/ts-csp/functions/partitionTime.html)
 
-- Works in Node.js and browsers; relies on global `setTimeout`, `AbortController`
+- Works in Node.js and browsers; relies on global `setTimeout`, `AbortController`,
+`AbortSignal`
 
 - No dependencies
 
