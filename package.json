@@ -1,6 +1,6 @@
 {
     "name": "@azerum/ts-csp",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "description": "CSP-style channels for TypeScript with async/await",
     "keywords": ["csp", "concurrency"],
     "homepage": "https://github.com/azerum/ts-csp",
