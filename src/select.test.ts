@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Channel } from './Channel.js'
-import { raceAbortSignal, raceNever, select } from './select.js'
+import { raceAbortSignal, raceNever, raceTimeout, select } from './select.js'
 import { expectToBlock } from './_expectToBlock.js'
 import { abortListenersCount } from './_abortListenersCount.js'
 
@@ -124,6 +124,45 @@ test('select() correctly infers result type with raceNever', async () => {
 })
 
 function assertIsSubtype<_T extends S, S>() {}
+
+describe('raceTimeout() never leaves a timer running after select() completes', () => {
+    // Do not fake setImmediate, used by expectToBlock()
+    const useFakeSetTimeout = () => vi.useFakeTimers({ 
+        toFake: ['setTimeout', 'clearTimeout']
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    test('When it wins the race', async () => {
+        useFakeSetTimeout()
+
+        const s = select({ timedOut: raceTimeout(1000) })
+
+        await expectToBlock(s)
+        expect(vi.getTimerCount()).toBe(1)
+
+        vi.advanceTimersByTime(2000)
+
+        await s
+        expect(vi.getTimerCount()).toBe(0)
+    })
+
+    test('When it looses the race', async () => {
+        useFakeSetTimeout()
+        
+        const ch = new Channel(1)
+        await ch.write(1)
+
+        await select({ 
+            ch: ch.raceRead(),
+            timedOut: raceTimeout(1000) 
+        })
+
+        expect(vi.getTimerCount()).toBe(0)
+    })
+})
 
 describe(
     'raceAbortSignal() always removes any added listeners on the signal by ' + 
