@@ -128,13 +128,6 @@ describe('Unbuffered', () => {
         ch.close()
         expect(ch.tryRead()).toBe(undefined)
     })
-
-    test('After close(), tryWrite()s return false', () => {
-        const ch = new Channel(0)
-
-        ch.close()
-        expect(ch.tryWrite(42)).toBe(false)
-    })
 })
 
 describe('Buffered', () => {
@@ -305,6 +298,20 @@ describe('All capacities: writes and reads', () => {
             for (let i = 0; i < 2; ++i) {
                 await expect(ch.write(i)).rejects.toThrowError(CannotWriteIntoClosedChannel)
             }
+        }
+    )
+
+    test.for(capacities)(
+        'After close(), new write()/tryWrite() throw (%s)', 
+        
+        async c => {
+            // Test with nonempty channel just in case
+            const ch = await makeChannelWithFullBuffer(c)
+
+            ch.close()
+
+            await expect(ch.write(1)).rejects.toThrowError(CannotWriteIntoClosedChannel)
+            expect(() => ch.tryWrite(1)).toThrowError(CannotWriteIntoClosedChannel)
         }
     )
 })

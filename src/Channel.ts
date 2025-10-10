@@ -50,10 +50,6 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
     }
 
     async write(value: T): Promise<void> {
-        if (this._closed) {
-            throw new CannotWriteIntoClosedChannel()
-        }
-
         const didWrite = this.tryWrite(value)
 
         if (didWrite) {
@@ -71,7 +67,7 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
         }
 
         if (this._closed) {
-            return false
+            throw new CannotWriteIntoClosedChannel()
         }
 
         const readToResolve = this.blockedReads.shift()

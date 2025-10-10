@@ -116,9 +116,10 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
     write: (value: T) => Promise<void>
 
     /**
-     * Non-blocking version of {@link WritableChannel.write}. Writes the value
-     * only if the channel is "writable" (see {@link WritableChannel.waitUntilWritable}
-     * for the definition). Returns `true` if successful
+     * Non-blocking version of {@link WritableChannel.write}. Returns `true`
+     * is the value was written into the channel. Returns `false` when
+     * {@link WritableChannel.write} would block. **Throws** if the channel 
+     * is closed
      */ 
     tryWrite: (value: T) => boolean
 
@@ -149,7 +150,8 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
      * - Has a blocked {@link ReadableChannel.read} call
      * 
      * Intuitively, a channel is "writable", when the next 
-     * {@link WritableChannel.write} call on it will not block
+     * {@link WritableChannel.write} call on it will not block (will resolve
+     * or reject immediately)
      * 
      * @param value Specify value that will be returned once the wait unblocks
      * 
