@@ -137,7 +137,7 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
      * - Calls to {@link ReadableChannel.read} will consume the values left
      * in the buffer before returning `undefined` 
      * 
-     * Unlike in Go, this method is safe to call multiple times (idempotent)
+     * Unlike in Go, this method is idempotent
      */
     close: () => void
 
