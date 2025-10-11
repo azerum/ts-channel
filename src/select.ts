@@ -1,27 +1,43 @@
 import { shuffle } from './_fisherYatesShuffle.js'
+import { NamedError } from './_NamedError.js'
 import { AbortablePromise } from './AbortablePromise.js'
-import type { SelectablePromise } from './channel-api.js'
+import type { Selectable } from './channel-api.js'
 
-export type SelectArgsLike = Record<string, SelectablePromise<unknown>>
+export type SelectArgsMap = Record<string, SelectArg>
+
+export type SelectArg =
+    | Selectable<unknown>
+    | Promise<unknown>
+    | ((signal: AbortSignal) => Promise<unknown>)
 
 export interface SelectResultLike {
     type: PropertyKey
     value: unknown
 }
 
-export type SelectResult<TArgs extends SelectArgsLike> = ({
+export type SelectResult<TArgs extends SelectArgsMap> = ({
     [K in StringKeyof<TArgs>]: {
         type: K
-        value: InferSelectablePromiseType<TArgs[K]>
+        value: InferSelectArgResult<TArgs[K]>
     }
 })[StringKeyof<TArgs>]
 
 type StringKeyof<T> = Extract<keyof T, string>
 
-type InferSelectablePromiseType<T> = 
-    T extends SelectablePromise<infer U> 
-        ? U
+type InferSelectArgResult<T extends SelectArg> =
+    T extends Selectable<infer U>
+    ? U
+    : T extends Promise<infer U>
+    ? U
+    : T extends (signal: AbortSignal) => Promise<infer U>
+    ? U
     : never
+
+export class SelectError extends NamedError {
+    constructor(readonly argName: string, cause: unknown) {
+        super(`Error in argument ${argName}`, { cause })
+    }
+}
 
 /**
  * ### Overview
@@ -72,36 +88,52 @@ type InferSelectablePromiseType<T> =
  * 
  * Also see {@link raceTimeout}, {@link raceAbortSignal}, {@link raceNever}
  */
-export async function select<TArgs extends SelectArgsLike>(
+export async function select<TArgs extends SelectArgsMap>(
     args: TArgs
 ): Promise<SelectResult<TArgs>> {
     const c = new AbortController()
 
-    const promises = Object.entries(args).map((typeAndP) => {
-        const [_, p] = typeAndP
-        return p.wait(typeAndP, c.signal)
-    })
-    
+    const nameAndArg = Object.entries(args)
+    shuffle(nameAndArg)
+
+    const promises = nameAndArg.map(
+        ([name, arg], index) => waitForArg(arg, name, index, c.signal)
+    )
+
     try {
         while (true) {
-            shuffle(promises)
-    
-            const [winner, index] = await Promise.race(
-                promises.map((p, index) => p.then(r => [r, index] as const))
-            )
-    
-            const [type, p] = winner
-            const maybeResult = p.attempt()
-    
-            if (maybeResult[0]) {
-                //@ts-expect-error
-                return {  
-                    type,
-                    value: maybeResult[1],
+            const winner = await Promise.race(promises)
+
+            if (winner.type === 'promise') {
+                const r = {
+                    type: winner.name,
+                    value: winner.value,
                 }
+
+                //@ts-expect-error
+                return r
             }
-    
-            promises[index] = p.wait(winner, c.signal)
+
+            let attemptResult: readonly [true, unknown] | readonly [false]
+
+            try {
+                attemptResult = winner.self.attempt()
+            }
+            catch (exception) {
+                throw new SelectError(winner.name, exception)
+            }
+
+            if (attemptResult[0]) {
+                const r = {
+                    type: winner.name,
+                    value: attemptResult[1]
+                }
+
+                //@ts-expect-error
+                return r
+            }
+            
+            promises[winner.index] = winner.self.wait(winner, c.signal)
         }
     }
     finally {
@@ -110,7 +142,69 @@ export async function select<TArgs extends SelectArgsLike>(
 }
 
 /**
- * Returns a {@link SelectablePromise} that resolves once the passed signal aborts.
+ * Note: we could instead define how to map each SelectArg into Selectable
+ * and keep `select()` code uniform, but the goal here is to avoid, as much as
+ * possible, adding async/await indirection. Perhaps helps for performance,
+ * but mainly makes fairness more predictable
+ */
+function waitForArg(
+    arg: SelectArg,
+    name: string,
+    index: number,
+    signal: AbortSignal
+): Promise<WaitResult> {
+    if (arg instanceof Promise) {
+        return arg
+            .then(
+                value => ({ type: 'promise', name, value }),
+
+                error => {
+                    throw new SelectError(name, error)
+                },
+            )
+    }
+
+    if (typeof arg === 'function') {
+        return arg(signal).then(
+            value => ({ type: 'promise', name, value }),
+
+            error => {
+                throw new SelectError(name, error)
+            },
+        )
+    }
+
+    return arg.wait(
+        { type: 'selectable', name, index, self: arg }, 
+        signal
+    )
+    .catch(error => {
+        throw new SelectError(name, error)
+    })
+}
+
+type WaitResult =
+    | { type: 'promise', name: string, value: unknown }
+    | { type: 'selectable', name: string, index: number, self: Selectable<unknown> }
+
+/**
+ * Type-level check that `value` is `never`. Useful for exhaustive
+ * matching, e.g. for return value of {@link select}
+ * 
+ * If you provide value that is not of type `never`, there will be a 
+ * compile-time error. As a failsafe, this function will throw at runtime
+ * if it is ever called (code with `never` values is supposed to be unreachable)
+ */
+export function assertNever(value: never): never {
+    throw new Error(
+        `Expected code to be unreachable. Got value: ${JSON.stringify(value)}`
+    )
+}
+
+// TODO: rework below
+
+/**
+ * Returns a {@link Selectable} that resolves once the passed signal aborts.
  * Meant to be used with {@link select}, to cancel reads/writes to channels
  * based on the signal
  * 
@@ -144,7 +238,7 @@ export async function select<TArgs extends SelectArgsLike>(
  * }
  * ```
  */
-export function raceAbortSignal(signal: AbortSignal): SelectablePromise<unknown> {
+export function raceAbortSignal(signal: AbortSignal): Selectable<unknown> {
     return {
         wait(value, cancelSignal) {
             return new AbortablePromise(resolve => {
@@ -173,10 +267,10 @@ export function raceAbortSignal(signal: AbortSignal): SelectablePromise<unknown>
 }
 
 /**
- * A {@link SelectablePromise} that never wins {@link select} 
+ * A {@link Selectable} that never wins {@link select} 
  * race. Useful when you need to select something conditionally
  * 
- * > Warning: if you call {@link SelectablePromise.wait} directly and `await`
+ * > Warning: if you call {@link Selectable.wait} directly and `await`
  * and/or add callbacks with `.then()` on the returned promise, you may leak
  * memory. That's because the promise never resolves. Memory is not leaked
  * if you pass `signal` and abort it  
@@ -201,7 +295,7 @@ export function raceAbortSignal(signal: AbortSignal): SelectablePromise<unknown>
  * }
  * ```
  */
-export const raceNever: SelectablePromise<never> = {
+export const raceNever: Selectable<never> = {
     wait(_value, signal) {
         return new AbortablePromise(() => {
             return null
@@ -214,7 +308,7 @@ export const raceNever: SelectablePromise<never> = {
 }
 
 /**
- * Returns a {@link SelectablePromise} that resolves after given time.
+ * Returns a {@link Selectable} that resolves after given time.
  * Meant to be used to cancel reads/writes on timeout with {@link select}
  * 
  * @example
@@ -225,7 +319,7 @@ export const raceNever: SelectablePromise<never> = {
  * select({ wrote: ch.raceWrite(42), timedOut: raceTimeout(1000) })
  * ```
  */
-export function raceTimeout(ms: number): SelectablePromise<void> {
+export function raceTimeout(ms: number): Selectable<void> {
     let elapsed = false
 
     return {
@@ -244,52 +338,4 @@ export function raceTimeout(ms: number): SelectablePromise<void> {
             return elapsed ? [true, undefined] : [false]
         },
     }
-}
-
-/**
- * Experimental: use {@link select} with arbitrary async operations
- * that can be cancelled via `AbortSignal`:
- * 
- * ```ts
- * select({
- *  didFetch: raceAsync(s => fetch('https://example.com', { signal: s })),
- *  didRead: channel.raceRead(),
- * })
- * ```
- */
-export function raceAsync<const T>(
-    fn: (signal?: AbortSignal) => Promise<T>
-): SelectablePromise<T> {
-    let result: T | typeof kNotDone = kNotDone
-
-    return {
-        async wait(value, signal) {
-            result = await fn(signal)
-            return value
-        },
-
-        attempt() {
-            if (result === kNotDone) {
-                return [false]
-            }
-
-            return [true, result]
-        },
-    }
-}
-
-const kNotDone = Symbol('kNotDone')
-
-/**
- * Type-level check that `value` is `never`. Useful for exhaustive
- * matching, e.g. for return value of {@link select}
- * 
- * If you provide value that is not of type `never`, there will be a 
- * compile-time error. As a failsafe, this function will throw at runtime
- * if it is ever called (code with `never` values is supposed to be unreachable)
- */
-export function assertNever(value: never): never {
-    throw new Error(
-        `Expected code to be unreachable. Got value: ${JSON.stringify(value)}`
-    )
 }

@@ -1,7 +1,7 @@
 import { FifoRingBuffer } from './_FifoRingBuffer.js'
 import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
-import { CannotWriteIntoClosedChannel, type NotUndefined, type ReadableChannel, type SelectablePromise, type WritableChannel } from './channel-api.js'
+import { CannotWriteIntoClosedChannel, type NotUndefined, type ReadableChannel, type Selectable, type WritableChannel } from './channel-api.js'
 
 /**
  * Implementation of buffered and unbuffered channel, depending on the constructor 
@@ -161,7 +161,7 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
         }, signal)
     }
 
-    async waitUntilWritable<const R>(value: R, signal?: AbortSignal): Promise<R> {
+    waitUntilWritable<const R>(value: R, signal?: AbortSignal): Promise<R> {
         return new AbortablePromise(resolve => {
             if (this._closed) {
                 resolve(value)
@@ -244,7 +244,7 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
         }
     }
 
-    raceRead(): SelectablePromise<T | undefined> {
+    raceRead(): Selectable<T | undefined> {
         return {
             wait: (value, signal) => {
                 return this.waitUntilReadable(value, signal)
@@ -262,7 +262,7 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
         }
     }
 
-    raceWrite(value: T): SelectablePromise<void> {
+    raceWrite(value: T): Selectable<void> {
         return {
             wait: (value, signal) => {
                 return this.waitUntilWritable(value, signal)

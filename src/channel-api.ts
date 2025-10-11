@@ -81,7 +81,7 @@ export interface ReadableChannel<T extends NotUndefined> extends HasClosed, Asyn
     /**
      * Like {@link ReadableChannel.read}, but can be used with {@link select}
      */
-    raceRead: () => SelectablePromise<T | undefined>
+    raceRead: () => Selectable<T | undefined>
 }
 
 /**
@@ -169,28 +169,12 @@ export interface WritableChannel<T extends NotUndefined> extends HasClosed {
     /**
      * Like {@link WritableChannel.write}, but can be used with {@link select}
      */
-    raceWrite: (value: T) => SelectablePromise<void> 
+    raceWrite: (value: T) => Selectable<void> 
 }
 
 export class CannotWriteIntoClosedChannel extends NamedError {}
 
-/**
- * Promise that can be used with {@link select}. Consists of two parts:
- * 
- * - First waits until operation can be done (e.g. {@link WritableChannel.write}
- * waiting for free space in the buffer)
- * 
- * - Second attempts to perform the operation, which may fail due to some race 
- * conditions (e.g. after {@link WritableChannel.waitUntilWritable}, call to 
- * {@link WritableChannel.tryWrite} may return false if some other write
- * was performed in-between)
- * 
- * Implementors of the interface should follow the contract:
- * 
- * - {@link SelectablePromise.wait} should reject with an error 
- * (preferably {@link AbortedError}) when the passed `signal` is aborted
- */
-export interface SelectablePromise<T> {
-    wait: <const R>(value: R, signal?: AbortSignal) => Promise<R>
-    attempt: () => [true, T] | [false]
+export interface Selectable<T> {
+    wait: <const R>(value: R, signal: AbortSignal) => Promise<R>
+    attempt: () => readonly [true, T] | readonly [false]
 }

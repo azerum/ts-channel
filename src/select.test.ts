@@ -1,40 +1,126 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { assert, describe, expect, test } from 'vitest'
 import { Channel } from './Channel.js'
-import { raceAbortSignal, raceNever, raceTimeout, select } from './select.js'
+import { assertNever, select, SelectError } from './select.js'
 import { expectToBlock } from './_expectToBlock.js'
-import { abortListenersCount } from './_abortListenersCount.js'
+import timers from 'timers/promises'
+import { CannotWriteIntoClosedChannel } from './channel-api.js'
 
-test('Selecting reads and writes', async () => {
-    // When selecting multiple reads and writes:
-    // 1. Only one operation "wins the race" and completes
-    // 2. Other operations are not performed and leave their channels intact
+describe('Can select raceRead()', () => {
+    test('read can win the race', async () => {
+        const ch1 = new Channel(0)
+        const ch2 = new Channel(0)
 
-    const ch1 = new Channel(0)
-    const ch2 = new Channel(0)
-    const ch3 = new Channel(0)
-    const ch4 = new Channel(0)
+        const s = select({
+            ch1: ch1.raceRead(),
+            ch2: ch2.raceRead(),
+        })
 
-    const s = select({
-        ch1: ch1.raceRead(),
-        ch2: ch2.raceRead(),
-        ch3: ch3.raceWrite(3),
-        ch4: ch4.raceWrite(4),
+        await expectToBlock(s)
+        await ch1.write(1)
+
+        await expect(s).resolves.toEqual({ type: 'ch1', value: 1 })
+        
+        // Verify that ch2 is not being read from anymore
+        await expectToBlock(ch2.write(1))
     })
 
-    await expectToBlock(s)
+    test('If multiple channels are readable, only the winner is read from', async () => {
+        const ch1 = new Channel(0)
+        const ch2 = new Channel(0)
 
-    const w2 = ch2.write(2)
-    const r3 = ch3.read()
+        void ch1.write(1)
+        void ch2.write(1)
 
-    await expect(s).resolves.toEqual({ type: 'ch2', value: 2 })
+        const { type } = await select({
+            ch1: ch1.raceRead(),
+            ch2: ch2.raceRead(),
+        })
 
-    // Verify that write to ch2 succeeded, while other channels were not 
-    // written to/read from
+        const [winningCh, loosingCh] = 
+            type === 'ch1'
+                ? [ch1, ch2]
+            : type === 'ch2'
+                ? [ch2, ch1]
+            : assertNever(type)
+        
+        // Verify that the winning channel was read from and the loosing
+        // channel still has a value
 
-    await expectToBlock(ch1.write(1))
-    await w2
-    await expectToBlock(r3)
-    await expectToBlock(ch4.read())
+        await expectToBlock(winningCh.read())
+        await expect(loosingCh.read()).resolves.toBe(1)
+    })
+})
+
+describe('Can select raceWrite()', () => {
+    test('write() can win the race', async () => {
+        const ch1 = new Channel(0)
+        const ch2 = new Channel(0)
+
+        const s = select({
+            ch1: ch1.raceWrite(1),
+            ch2: ch2.raceWrite(2),
+        })
+
+        await expectToBlock(s)
+        await expect(ch2.read()).resolves.toBe(2)
+        await expect(s).resolves.toStrictEqual({ type: 'ch2', value: undefined })
+
+        // Verify that ch1 was not written into
+        await expectToBlock(ch1.read())
+    })
+
+    test('If multiple channels are writable, only the winner is written into', async () => {
+        // Buffered channels are writable initially
+        const ch1 = new Channel(1)
+        const ch2 = new Channel(1)
+
+        const { type } = await select({
+            ch1: ch1.raceWrite(1),
+            ch2: ch2.raceWrite(1),
+        })
+
+        const [winningCh, loosingCh] = 
+            type === 'ch1'
+                ? [ch1, ch2]
+            : type === 'ch2'
+                ? [ch2, ch1]
+            : assertNever(type)
+
+        // Verify that the winning channel was written into and the loosing
+        // channel is still empty
+
+        await expect(winningCh.read()).resolves.toBe(1)
+        await expectToBlock(loosingCh.read())
+    })
+
+    test('If channel closes, select throws and cancels other operations', async () => {
+        const ch1 = new Channel(0)
+        const ch2 = new Channel(0)
+        const ch3 = new Channel(0)
+
+        const s = select({ 
+            ch1: ch1.raceWrite(1),
+            ch2: ch2.raceWrite(1),
+            ch3: ch3.raceWrite(1),
+        })
+
+        await expectToBlock(s)
+
+        // Test what happens when multiple channels close
+        ch1.close()
+        ch2.close()
+
+        await expect(s).rejects.toThrow()
+        const error = await s.catch(e => e)
+
+        assert(error instanceof SelectError)
+        expect(error.argName).toBeOneOf(['ch1', 'ch2'])
+        expect(error.cause instanceof CannotWriteIntoClosedChannel)
+
+        // Verify that the remaining operation - write into ch3 - was 
+        // cancelled
+        await expectToBlock(ch3.read())
+    })
 })
 
 test(
@@ -105,105 +191,170 @@ test(
     }
 )
 
-test('select() correctly infers result type with raceNever', async () => {
-    const ch = new Channel<number>(0)
+describe('Can select promises', () => {
+    test('Already resolved promise', async () => {
+        const ch = new Channel(0)
 
-    function example(condition: boolean) {
-        // The type of result of `op` here should be the same as in
-        // raceRead(). That is, raceNever must not affect the type
-        return select({
-            op: condition ? ch.raceRead() : raceNever,
+        const result = await select({
+            ch: ch.raceRead(),
+            p: Promise.resolve(1),
         })
-    }
 
-    type Actual = Awaited<ReturnType<typeof example>>
-    type Expected = { type: 'op', value: number | undefined }
+        expect(result.type).toBe('p')
+        expect(result.value).toBe(1)
 
-    assertIsSubtype<Actual, Expected>()
-    assertIsSubtype<Expected, Actual>()
+        await expectToBlock(ch.write(1))
+    })
+
+    test('Already rejected promise', async () => {
+        const ch = new Channel(0)
+
+        const s = select({
+            ch: ch.raceRead(),
+            p: Promise.reject(new Error('Too bad')),
+        })
+
+        await expect(s).rejects.toThrow()
+        const error = await s.catch(e => e)
+
+        assert(error instanceof SelectError)
+        expect(error.argName).toBe('p')
+        assert(error.cause instanceof Error)
+        expect(error.cause.message).toBe('Too bad')
+
+        await expectToBlock(ch.write(1))
+    })
+
+    test('Asynchronously resolved promise', async () => {
+        const ch = new Channel(0)
+
+        const resolveAsync = async () => {
+            await Promise.resolve()
+            return 1
+        }
+        
+        const result = await select({
+            ch: ch.raceRead(),
+            p: resolveAsync()
+        })
+
+        expect(result.type).toBe('p')
+        expect(result.value).toBe(1)  
+
+        await expectToBlock(ch.write(1))
+    })
+
+    test('Asynchronously rejected promise', async () => {
+        const ch = new Channel(0)
+
+        const throwAsync = async () => {
+            await Promise.resolve()
+            throw new Error('Too bad')
+        }
+        
+        const s = select({
+            ch: ch.raceRead(),
+            p: throwAsync(),
+        })
+
+        await expect(s).rejects.toThrow()  
+        const error = await s.catch(e => e)
+
+        assert(error instanceof SelectError)
+        expect(error.argName).toBe('p')
+        assert(error.cause instanceof Error)
+        expect(error.cause.message).toBe('Too bad')
+
+        await expectToBlock(ch.write(1))
+    })
 })
 
-function assertIsSubtype<_T extends S, S>() {}
+describe('Can select abortable functions', () => {
+    test('Abortable fn can win the race', async () => {
+        const ch = new Channel(0)
 
-describe('raceTimeout() never leaves a timer running after select() completes', () => {
-    // Do not fake setImmediate, used by expectToBlock()
-    const useFakeSetTimeout = () => vi.useFakeTimers({ 
-        toFake: ['setTimeout', 'clearTimeout']
+        const result = await select({
+            ch: ch.raceRead(),
+            fn: signal => timers.setImmediate(42, { signal })
+        })
+
+        expect(result.type).toBe('fn')
+        expect(result.value).toBe(42)
+
+        await expectToBlock(ch.write(1))
     })
 
-    afterEach(() => {
-        vi.useRealTimers()
+    test('If fn throws, select throws and cancels other operations', async () => {
+        const ch = new Channel(0)
+
+        const s = select({
+            ch: ch.raceRead(),
+
+            fn: async _s => {
+                throw new Error('Too bad')
+            }
+        })
+
+        await expect(s).rejects.toThrow()
+        const error = await s.catch(e => e)
+
+        assert(error instanceof SelectError)
+        expect(error.argName).toBe('fn')
+        assert(error.cause instanceof Error)
+        expect(error.cause.message).toBe('Too bad')
+
+        // Verify that read from ch was cancelled
+        await expectToBlock(ch.write(1))
     })
 
-    test('When it wins the race', async () => {
-        useFakeSetTimeout()
-
-        const s = select({ timedOut: raceTimeout(1000) })
-
-        await expectToBlock(s)
-        expect(vi.getTimerCount()).toBe(1)
-
-        vi.advanceTimersByTime(2000)
-
-        await s
-        expect(vi.getTimerCount()).toBe(0)
-    })
-
-    test('When it looses the race', async () => {
-        useFakeSetTimeout()
-        
+    test('When abortable fn looses the race, the signal passed to it is aborted', async () => {
         const ch = new Channel(1)
         await ch.write(1)
 
-        await select({ 
+        let passedSignal: AbortSignal | null = null
+
+        const result = await select({
             ch: ch.raceRead(),
-            timedOut: raceTimeout(1000) 
+
+            fn: async signal => {
+                passedSignal = signal
+
+                while (true) {
+                    await timers.setTimeout(1000, undefined, { signal })
+                }
+            }
         })
 
-        expect(vi.getTimerCount()).toBe(0)
+        expect(result.type).toBe('ch')
+        expect(result.value).toBe(1)
+
+        //@ts-expect-error
+        expect(passedSignal?.aborted).toBe(true)
     })
 })
 
-describe(
-    'raceAbortSignal() always removes any added listeners on the signal by ' + 
-    'the end of select()', 
-    
-    () => {
-        test('When signal is already aborted', async () => {
-            const c = new AbortController()
+test('Fair when given resolved promises', async () => {
+    const opToCount = new Map<string, number>()
+    const runs = 10_000
 
-            c.abort()
-
-            await select({ aborted: raceAbortSignal(c.signal) })
-            expect(abortListenersCount(c.signal)).toBe(0)
+    for (let i = 0; i < runs; ++i) {
+        const result = await select({
+            a: Promise.resolve(1),
+            b: Promise.resolve(2),
+            c: Promise.resolve(3),
         })
 
-        test('When signal is aborted asynchronously', async () => {
-            const c = new AbortController()
-
-            const s = select({ aborted: raceAbortSignal(c.signal) })
-            await expectToBlock(s)
-
-            c.abort()
-            await s
-            expect(abortListenersCount(c.signal)).toBe(0)
-        })
-
-        test('When other operation wins the race', async () => {
-            const c = new AbortController()
-
-            const ch = new Channel(0)
-
-            const s = select({ 
-                wrote: ch.raceWrite(1),
-                aborted: raceAbortSignal(c.signal) 
-            })
-
-            await expectToBlock(s)
-
-            await ch.read()
-            await s
-            expect(abortListenersCount(c.signal)).toBe(0)
-        })
+        const prev = opToCount.get(result.type) ?? 0
+        opToCount.set(result.type, prev + 1)
     }
-)
+
+    const expected = runs / 3
+    const maxDifference = 0.02 * runs
+
+    for (const [op, count] of opToCount.entries()) {
+        const difference = Math.abs(expected - count)
+
+        expect(difference, `${op} has won ${count} times, expected ${expected} times`)
+            .toBeLessThanOrEqual(maxDifference)
+    }
+})
