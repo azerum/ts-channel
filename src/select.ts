@@ -111,10 +111,26 @@ export async function select<TArgs extends SelectArgsMap>(
 }
 
 /**
- * Note: we could instead define how to map each SelectArg into Selectable
- * and keep `select()` code uniform, but the goal here is to avoid, as much as
- * possible, adding async/await indirection. Perhaps helps for performance,
- * but mainly makes fairness more predictable
+ * NOTE: implementation should make best effort to ensure that each `arg`
+ * uses the same number of `.then()`/`catch()`/`await` on each arg. This
+ * is needed to ensure fairness
+ * 
+ * Any added `then()` delays settling of the promise, so if 
+ * user passed two resolved SelectArgs of different types, 
+ * say a1: Promise and a2: Selectable, but this function uses different number 
+ * of `then()`s for each, one with the least `then()`s will always win the race:
+ * 
+ * This always prints 2:
+ * 
+ * ```ts
+ * console.log(await Promise.race([
+ *  Promise.resolve(1).then().then(),
+ *  Promise.resolve(2).then(),
+ * ]))
+ * ```
+ * 
+ * As users don't see the machinery of `select()`, for them it would be
+ * confusing
  */
 function waitForArg(
     arg: SelectArg,
