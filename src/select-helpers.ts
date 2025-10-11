@@ -1,5 +1,10 @@
 import { makeAbortablePromise } from './makeAbortablePromise.js'
 
+/**
+ * Promise version of `setTimeout()`: resolves with `value` after `ms` ms. 
+ * Can be cancelled with `signal`: when cancelled, throws `AbortedError` and
+ * clears the timer
+ */
 export function sleep<const T>(ms: number, value: T, signal?: AbortSignal): Promise<T> {
     return makeAbortablePromise(resolve => {
         const handle = setTimeout(() => {
@@ -10,6 +15,40 @@ export function sleep<const T>(ms: number, value: T, signal?: AbortSignal): Prom
     }, signal)
 }
 
+/**
+ * Waits for `signal` to abort, resolves with `signal.reason` when it is aborted.
+ * The wait can be cancelled by providing a *second* signal - `cancelSignal`. 
+ * When `cancelSignal` is cancelled, promise rejects with `AbortedError`
+ * 
+ * Any listeners added on both `signal` and `cancelSignal` are
+ * always removed by the time the promise is settled - no leaks
+ * 
+ * Note that this function is curried - `returnOnAbort(signal)(cancelSignal)`
+ * instead of `returnOnAbort(signal, cancelSignal)`. This is to encourage cleanup
+ * of listeners when using it with {@link select}. Compare:
+ * 
+ * Listener is removed once {@link select} completes:
+ * 
+ * ```ts
+ * await select({ 
+ *  aborted: returnOnAbort(mySignal),
+ *  someOtherOp: something,
+ * })
+ * ```
+ * 
+ * Listener is not removed until `mySignal` aborts:
+ * 
+ * ```ts
+ * await select({ 
+ *  aborted: returnOnAbort(mySignal)(),
+ *  someOtherOp: something,
+ * })
+ * ```
+ * 
+ * In former we pass `(cancelSignal?: AbortSignal) => Promise<unknown>`, which 
+ * allows cancellation via `cancelSignal`. In later we pass `Promise<unknown>`,
+ * which cannot be cancelled
+ */
 export function returnOnAbort(signal: AbortSignal) {
     return (cancelSignal?: AbortSignal): Promise<unknown> => {
         return makeAbortablePromise(resolve => {
