@@ -1,6 +1,6 @@
 import { assert, describe, expect, test } from 'vitest'
 import { Channel } from './Channel.js'
-import { assertNever, select, SelectError } from './select.js'
+import { assertNever, select, SelectError, type SelectArgsMap } from './select.js'
 import { expectToBlock } from './_expectToBlock.js'
 import timers from 'timers/promises'
 import { CannotWriteIntoClosedChannel } from './channel-api.js'
@@ -19,7 +19,7 @@ describe('Can select raceRead()', () => {
         await ch1.write(1)
 
         await expect(s).resolves.toEqual({ type: 'ch1', value: 1 })
-        
+
         // Verify that ch2 is not being read from anymore
         await expectToBlock(ch2.write(1))
     })
@@ -36,13 +36,13 @@ describe('Can select raceRead()', () => {
             ch2: ch2.raceRead(),
         })
 
-        const [winningCh, loosingCh] = 
+        const [winningCh, loosingCh] =
             type === 'ch1'
                 ? [ch1, ch2]
-            : type === 'ch2'
-                ? [ch2, ch1]
-            : assertNever(type)
-        
+                : type === 'ch2'
+                    ? [ch2, ch1]
+                    : assertNever(type)
+
         // Verify that the winning channel was read from and the loosing
         // channel still has a value
 
@@ -79,12 +79,12 @@ describe('Can select raceWrite()', () => {
             ch2: ch2.raceWrite(1),
         })
 
-        const [winningCh, loosingCh] = 
+        const [winningCh, loosingCh] =
             type === 'ch1'
                 ? [ch1, ch2]
-            : type === 'ch2'
-                ? [ch2, ch1]
-            : assertNever(type)
+                : type === 'ch2'
+                    ? [ch2, ch1]
+                    : assertNever(type)
 
         // Verify that the winning channel was written into and the loosing
         // channel is still empty
@@ -98,7 +98,7 @@ describe('Can select raceWrite()', () => {
         const ch2 = new Channel(0)
         const ch3 = new Channel(0)
 
-        const s = select({ 
+        const s = select({
             ch1: ch1.raceWrite(1),
             ch2: ch2.raceWrite(1),
             ch3: ch3.raceWrite(1),
@@ -232,14 +232,14 @@ describe('Can select promises', () => {
             await Promise.resolve()
             return 1
         }
-        
+
         const result = await select({
             ch: ch.raceRead(),
             p: resolveAsync()
         })
 
         expect(result.type).toBe('p')
-        expect(result.value).toBe(1)  
+        expect(result.value).toBe(1)
 
         await expectToBlock(ch.write(1))
     })
@@ -251,13 +251,13 @@ describe('Can select promises', () => {
             await Promise.resolve()
             throw new Error('Too bad')
         }
-        
+
         const s = select({
             ch: ch.raceRead(),
             p: throwAsync(),
         })
 
-        await expect(s).rejects.toThrow()  
+        await expect(s).rejects.toThrow()
         const error = await s.catch(e => e)
 
         assert(error instanceof SelectError)
@@ -334,21 +334,76 @@ describe('Can select abortable functions', () => {
 })
 
 test('Fair when given resolved promises', async () => {
+    await testFairness(async () => ({
+        a: Promise.resolve(1),
+        b: Promise.resolve(2),
+        c: Promise.resolve(3),
+    }))
+})
+
+test('Fair with channel operations', async () => {
+    await testFairness(async () => {
+        const w1 = new Channel(1)
+        const w2 = new Channel(1)
+
+        const r1 = new Channel(1)
+        await r1.write(1)
+
+        const r2 = new Channel(1)
+        await r2.write(1)
+
+        return {
+            w1: w1.raceWrite(1),
+            w2: w2.raceWrite(1),
+
+            r1: r1.raceRead(),
+            r2: r2.raceRead(),
+        }
+    })
+})
+
+test('Fair with immediately resolving abortable fns', async () => {
+    const fn = async () => { }
+
+    const args = {
+        a: fn,
+        b: fn,
+        c: fn,
+    }
+
+    await testFairness(async () => args)
+})
+
+async function testFairness(
+    makeArgs: () => Promise<SelectArgsMap>,
+) {
     const opToCount = new Map<string, number>()
     const runs = 10_000
 
+    let argsCount: number | null = null
+
     for (let i = 0; i < runs; ++i) {
-        const result = await select({
-            a: Promise.resolve(1),
-            b: Promise.resolve(2),
-            c: Promise.resolve(3),
-        })
+        const args = await makeArgs()
+
+        const currentArgsCount = Object.keys(args).length
+        argsCount ??= currentArgsCount
+
+        if (currentArgsCount !== argsCount) {
+            throw new Error(
+                `makeArgs() must return the same number of args on every call. ` +
+                `Got different numbers: ${argsCount}, then ${currentArgsCount}`
+            )
+        }
+
+        const result = await select(args)
 
         const prev = opToCount.get(result.type) ?? 0
         opToCount.set(result.type, prev + 1)
     }
 
-    const expected = runs / 3
+    assert(argsCount !== null, 'Must run at least one run')
+
+    const expected = runs / argsCount
     const maxDifference = 0.02 * runs
 
     for (const [op, count] of opToCount.entries()) {
@@ -357,4 +412,4 @@ test('Fair when given resolved promises', async () => {
         expect(difference, `${op} has won ${count} times, expected ${expected} times`)
             .toBeLessThanOrEqual(maxDifference)
     }
-})
+}
