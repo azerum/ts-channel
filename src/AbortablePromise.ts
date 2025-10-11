@@ -10,24 +10,24 @@ import { NamedError } from './_NamedError.js'
  * 
  * Semantics:
  * 
- * - Adds `abort` listener on `AbortSignal`. After the promise settles,
+ * - Adds `abort` listener on `AbortSignal`. After promise settles,
  * the listener is always removed (no leaks)
  * 
- * - If `abort` fires before `resolve` or `reject` is called, 
- * calls `cleanupOnAbort` function is called and rejects with `AbortedError` 
+ * - If `resolve` or `reject` are called before `abort` fires, resolves/rejects
+ * as a usual promise
  * 
- * - If `resolve` or `reject` is called before `abort` is fired, resolves/rejects
- * as a regular promise
+ * - If `abort` fires before `resolve` or `reject` are called, 
+ * calls `cleanupOnAbortFn` and rejects with `AbortedError` 
  * 
- * - `cleanupOnAbort` is guaranteed to be called at most once, and only if
- * `resolve` or `reject` has not been called yet
- * 
- * - Race condition is possible where `abort` fires, than `resolve` or `reject`
- * is performed before `abort` is handled. In such case `resolve`/`reject`
- * always wins.
- * 
- * - If passed `AbortSignal` is already aborted, does not call `executor` at 
+ *  - If the passed `AbortSignal` is already aborted, does not call `executor` at 
  * all, and rejects with `AbortedError`
+ * 
+ * - `cleanupOnAbortFn` is guaranteed to be called only once, and only if 
+ * `resolve`/`reject` has not been called
+ * 
+ * - Race condition is possible where `abort` fires, than `resolve`/`reject`
+ * happens, then `abort` is handled. In such case `resolve`/`reject`
+ * always wins
  * 
  * @example
  *
