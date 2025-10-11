@@ -1,41 +1,25 @@
 import { NamedError } from './_NamedError.js'
 
 /**
- * Extends Promise constructor to accept not just a `(resolve, reject) => void` 
- * function, but `(resolve, reject) => cleanupOnAbortFn` and `AbortSignal`
+ * Helper to write promises that can be cancelled without: (1) leaking
+ * 'abort' listeners on the signal and (2) forgetting to write cleanup
+ * logic
  * 
- * Helps to write promises that can be cancelled without leaking `abort` 
- * listeners on the signal, and without forgetting to write cleanup logic.
- * See the example below
+ * Accepts an `AbortSignal` and an executor function - similar to 
+ * `(resolve, reject) => void` passed to `new Promise`, except this one 
+ * has type `(resolve, reject) => cleanupOnAbort | null`:
  * 
- * Semantics:
+ * - `resolve()`/`reject()` resolve/reject the promise as usual
  * 
- * - Adds `abort` listener on `AbortSignal`. After promise settles,
- * the listener is always removed (no leaks)
+ * - When `signal` is aborted before `resolve()`/`reject()` is called, the promise 
+ * automatically rejects with `AbortedError`. If provided, `cleanupOnAbort` is 
+ * called afterwards
  * 
- * - If `resolve` or `reject` are called before `abort` fires, resolves/rejects
- * as a usual promise
- * 
- * - If `abort` fires before `resolve` or `reject` are called, 
- * calls `cleanupOnAbortFn` and rejects with `AbortedError` 
- * 
- *  - If the passed `AbortSignal` is already aborted, does not call `executor` at 
- * all, and rejects with `AbortedError`
- * 
- * - `cleanupOnAbortFn` is guaranteed to be called only once, and only if 
- * `resolve`/`reject` has not been called
- * 
- * - Race condition is possible where `abort` fires, than `resolve`/`reject`
- * happens, then `abort` is handled. In such case `resolve`/`reject`
- * always wins
- * 
- * @example
- *
- * Promisified `setTimeout` with cancellation that removes the timer
+ * For example, here's cancellable `setTimeout()`:
  * 
  * ```ts
  * function sleep(ms: number, signal?: AbortSignal) {
- *      return new AbortablePromise((resolve, _reject) => {
+ *      return makeAbortablePromise((resolve, _reject) => {
  *          const handle = setTimeout(() => resolve(), ms)
  * 
  *          // Called only if `signal` is aborted before `setTimeout` callback 
@@ -44,6 +28,38 @@ import { NamedError } from './_NamedError.js'
  *      }, signal)
  * }
  * ```
+ * 
+ * This code does not leaving dangling timer if `sleep()` is cancelled
+ * 
+ * This code also does not leak `'abort'` listener on `signal` - the 
+ * listener is always removed, regardless of whether `sleep()` has completed
+ * or got cancelled
+ * 
+ * Finally, if `signal` is not provided, the promise behaves just like regular one,
+ * and `cleanupOnAbort` is never called
+ *
+ * > Tip: if you want to return a special value instead of throwing upon cancelling,
+ * just wrap the promise in `try { return await promise } catch (exception) { if (exception instanceof AbortedException) { return ... } throw exception }`
+ * or similar
+ * 
+ * Detailed semantics:
+ * 
+ * - As with usual promise, if `resolve()`/`reject()` are called after
+ * the promise is settled (either via `resolve()`/`reject()`, or by cancelling
+ * `signal`), they have no effect
+ * 
+ * - If `signal` is already aborted at the moment of the call, `executor()` is
+ * not even ran - promise rejected with `AbortedError` is returned immediately
+ * 
+ * - Adds `abort` listener on `AbortSignal`. After promise settles,
+ * the listener is always removed (no leaks)
+ * 
+ * - `cleanupOnAbortFn` is guaranteed to be called only once, and only if 
+ * `resolve()`/`reject()` have not been called
+ * 
+ * - Race condition is possible where `'abort'` *fires*, than `resolve()`/`reject()`
+ * is called, then `'abort'` is *handled*. In such case `resolve()`/`reject()`
+ * always win
  */
 export function makeAbortablePromise<T>(
     executor: (
