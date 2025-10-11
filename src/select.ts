@@ -1,10 +1,14 @@
-import { attemptNotOk, attemptOkUndefined } from './_attempt-results.js'
+import { attemptNotOk } from './_attempt-results.js'
 import { shuffle } from './_fisherYatesShuffle.js'
 import { NamedError } from './_NamedError.js'
 import { AbortablePromise } from './AbortablePromise.js'
 import type { Selectable, SelectableAttemptResult } from './channel-api.js'
 
-export type SelectArgsMap = Record<string, SelectArg>
+export type SelectArgsMap = Record<string, NullableSelectArg>
+
+export type NullableSelectArg = 
+    | SelectArg
+    | null
 
 export type SelectArg =
     | Selectable<unknown>
@@ -25,13 +29,13 @@ export type SelectResult<TArgs extends SelectArgsMap> = ({
 
 type StringKeyof<T> = Extract<keyof T, string>
 
-type InferSelectArgResult<T extends SelectArg> =
+type InferSelectArgResult<T> =
     T extends Selectable<infer U>
-    ? U
+        ? U
     : T extends Promise<infer U>
-    ? U
+        ? U
     : T extends (signal: AbortSignal) => Promise<infer U>
-    ? U
+        ? U
     : never
 
 export class SelectError extends NamedError {
@@ -40,55 +44,6 @@ export class SelectError extends NamedError {
     }
 }
 
-/**
- * ### Overview
- * 
- * Similar to `select {}` statement in Go`: tries to perform multiple reads/writes 
- * at once. The first read/write that  can be performed wins the race. The 
- * remaining operations are cancelled in such way that channels remain intact 
- * (no values read from/written into them)
- * 
- * If multiple operations can be performed simultaneously (e.g. if you 
- * try to perform read on two non-empty channels), one operation is selected
- * at random
- * 
- * Example: read from `a: ReadableChannel<number>` or `b: ReadableChannel<boolean>`, 
- * whichever is readable first:
- * 
- * ```ts
- * const result = await select({ 
- *  a: a.raceRead(),
- *  b: b.raceRead()
- * })
- * 
- * result.type // 'a' | 'b'
- * result.value // number | boolean | undefined
- * ```
- * 
- * This is similar to:
- * 
- * ```ts
- * await Promise.race([a.read(), b.read()])
- * ```
- * 
- * Except:
- * 
- * - `Promise.race()` will not cancel the read from `b` - next value written
- * into `b` will be lost
- * 
- * - `Promise.race()` is not fair - it always selects the first promise in
- * the array if multiple are resolved
- * 
- * ### Other operations
- * 
- * Writes can be raced too:
- * 
- * ```ts
- * select({ didWrite: ch.raceWrite(42) })
- * ```
- * 
- * Also see {@link raceTimeout}, {@link raceAbortSignal}, {@link raceNever}
- */
 export async function select<TArgs extends SelectArgsMap>(
     args: TArgs
 ): Promise<SelectResult<TArgs>> {
@@ -97,9 +52,22 @@ export async function select<TArgs extends SelectArgsMap>(
     const nameAndArg = Object.entries(args)
     shuffle(nameAndArg)
 
-    const promises = nameAndArg.map(
-        ([name, arg], index) => waitForArg(arg, name, index, c.signal)
-    )
+    const promises: Promise<WaitResult>[] = []
+
+    nameAndArg.forEach(([name, arg], index) => {
+        if (arg === null) {
+            return
+        }
+
+        const p = waitForArg(arg, name, index, c.signal)
+        promises.push(p)
+    })
+
+    if (promises.length === 0) {
+        throw new Error(
+            `select() requires at least one non-null operation. Received: ${JSON.stringify(args)}`
+        )
+    }
 
     try {
         while (true) {
@@ -263,80 +231,6 @@ export function raceAbortSignal(signal: AbortSignal): Selectable<unknown> {
             }
 
             return attemptNotOk
-        },
-    }
-}
-
-/**
- * A {@link Selectable} that never wins {@link select} 
- * race. Useful when you need to select something conditionally
- * 
- * > Warning: if you call {@link Selectable.wait} directly and `await`
- * and/or add callbacks with `.then()` on the returned promise, you may leak
- * memory. That's because the promise never resolves. Memory is not leaked
- * if you pass `signal` and abort it  
- * >
- * > Usually you don't use that method directly
- * 
- * @example
- * 
- * ```ts
- * // Performs read on `ch`, optionally cancels the read if `signal`
- * // is provided and is aborted. Throws on abort
- * async function readOrCancel(ch: ReadableChannel<number>, signal?: AbortSignal): Promise<number | undefined> {
- *  const result = await select({ 
- *    read: ch.raceRead(),
- *    aborted: signal ? raceAbortSignal(signal) : raceNever
- *  })
- * 
- *  switch (result.type) {
- *    case 'read': return result.value
- *    case 'aborted': throw result.value
- *  }
- * }
- * ```
- */
-export const raceNever: Selectable<never> = {
-    wait(_value, signal) {
-        return new AbortablePromise(() => {
-            return null
-        }, signal)
-    },
-
-    attempt() {
-        return attemptNotOk
-    },
-}
-
-/**
- * Returns a {@link Selectable} that resolves after given time.
- * Meant to be used to cancel reads/writes on timeout with {@link select}
- * 
- * @example
- * 
- * Write into channel or timeout
- * 
- * ```ts
- * select({ wrote: ch.raceWrite(42), timedOut: raceTimeout(1000) })
- * ```
- */
-export function raceTimeout(ms: number): Selectable<void> {
-    let elapsed = false
-
-    return {
-        wait(value, signal) {
-            return new AbortablePromise(resolve => {
-                const handle = setTimeout(() => {
-                    elapsed = true
-                    resolve(value)
-                }, ms)
-
-                return () => clearTimeout(handle)
-            }, signal)
-        },
-
-        attempt() {
-            return elapsed ? attemptOkUndefined : attemptNotOk
         },
     }
 }

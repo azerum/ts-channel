@@ -333,83 +333,134 @@ describe('Can select abortable functions', () => {
     })
 })
 
-test('Fair when given resolved promises', async () => {
-    await testFairness(async () => ({
-        a: Promise.resolve(1),
-        b: Promise.resolve(2),
-        c: Promise.resolve(3),
-    }))
+describe('Fairness', () => {
+    test('Fair when given resolved promises', async () => {
+        await testFairness(async () => ({
+            a: Promise.resolve(1),
+            b: Promise.resolve(2),
+            c: Promise.resolve(3),
+        }))
+    })
+    
+    test('Fair with channel operations', async () => {
+        await testFairness(async () => {
+            const w1 = new Channel(1)
+            const w2 = new Channel(1)
+    
+            const r1 = new Channel(1)
+            await r1.write(1)
+    
+            const r2 = new Channel(1)
+            await r2.write(1)
+    
+            return {
+                w1: w1.raceWrite(1),
+                w2: w2.raceWrite(1),
+    
+                r1: r1.raceRead(),
+                r2: r2.raceRead(),
+            }
+        })
+    })
+    
+    test('Fair with immediately resolving abortable fns', async () => {
+        const fn = async () => { }
+    
+        const args = {
+            a: fn,
+            b: fn,
+            c: fn,
+        }
+    
+        await testFairness(async () => args)
+    })
+    
+    async function testFairness(
+        makeArgs: () => Promise<SelectArgsMap>,
+    ) {
+        const opToCount = new Map<string, number>()
+        const runs = 10_000
+    
+        let argsCount: number | null = null
+    
+        for (let i = 0; i < runs; ++i) {
+            const args = await makeArgs()
+    
+            const currentArgsCount = Object.keys(args).length
+            argsCount ??= currentArgsCount
+    
+            if (currentArgsCount !== argsCount) {
+                throw new Error(
+                    `makeArgs() must return the same number of args on every call. ` +
+                    `Got different numbers: ${argsCount}, then ${currentArgsCount}`
+                )
+            }
+    
+            const result = await select(args)
+    
+            const prev = opToCount.get(result.type) ?? 0
+            opToCount.set(result.type, prev + 1)
+        }
+    
+        assert(argsCount !== null, 'Must run at least one run')
+    
+        const expected = runs / argsCount
+        const maxDifference = 0.02 * runs
+    
+        for (const [op, count] of opToCount.entries()) {
+            const difference = Math.abs(expected - count)
+    
+            expect(difference, `${op} has won ${count} times, expected ${expected} times`)
+                .toBeLessThanOrEqual(maxDifference)
+        }
+    }
 })
 
-test('Fair with channel operations', async () => {
-    await testFairness(async () => {
-        const w1 = new Channel(1)
-        const w2 = new Channel(1)
+describe('Can select null', () => {
+    test('Null never wins the race', async () => {
+        const ch = new Channel(0)
 
-        const r1 = new Channel(1)
-        await r1.write(1)
+        const s = select({ 
+            ch: ch.raceRead(),
+            nothing: null
+        })
 
-        const r2 = new Channel(1)
-        await r2.write(1)
+        await expectToBlock(s)
+    })
 
-        return {
-            w1: w1.raceWrite(1),
-            w2: w2.raceWrite(1),
+    test(
+        'When null is used to conditionally select operation, types are ' + 
+        'inferred as expected',
 
-            r1: r1.raceRead(),
-            r2: r2.raceRead(),
+        async () => {
+            function maybeTimeout(timeout: boolean) {
+                return select({
+                    value: timeout ? timers.setTimeout(100, 42) : null
+                })
+            }
+
+            type Expected = { type: 'value', value: number }
+            type Actual = Awaited<ReturnType<typeof maybeTimeout>>
+
+            assertIsSubtype<Expected, Actual>()
+            assertIsSubtype<Actual, Expected>()
         }
+    )
+
+    function assertIsSubtype<_T extends S, S>() {}
+
+    test('When given only null args, select throws', async () => {
+        const s = select({
+            a: null,
+            b: null,
+            c: null,
+        })
+
+        await expect(s).rejects.toThrowError()
     })
 })
 
-test('Fair with immediately resolving abortable fns', async () => {
-    const fn = async () => { }
-
-    const args = {
-        a: fn,
-        b: fn,
-        c: fn,
-    }
-
-    await testFairness(async () => args)
+test('When given empty object, throws', async () => {
+    const s = select({})
+    await expect(s).rejects.toThrowError()
 })
-
-async function testFairness(
-    makeArgs: () => Promise<SelectArgsMap>,
-) {
-    const opToCount = new Map<string, number>()
-    const runs = 10_000
-
-    let argsCount: number | null = null
-
-    for (let i = 0; i < runs; ++i) {
-        const args = await makeArgs()
-
-        const currentArgsCount = Object.keys(args).length
-        argsCount ??= currentArgsCount
-
-        if (currentArgsCount !== argsCount) {
-            throw new Error(
-                `makeArgs() must return the same number of args on every call. ` +
-                `Got different numbers: ${argsCount}, then ${currentArgsCount}`
-            )
-        }
-
-        const result = await select(args)
-
-        const prev = opToCount.get(result.type) ?? 0
-        opToCount.set(result.type, prev + 1)
-    }
-
-    assert(argsCount !== null, 'Must run at least one run')
-
-    const expected = runs / argsCount
-    const maxDifference = 0.02 * runs
-
-    for (const [op, count] of opToCount.entries()) {
-        const difference = Math.abs(expected - count)
-
-        expect(difference, `${op} has won ${count} times, expected ${expected} times`)
-            .toBeLessThanOrEqual(maxDifference)
-    }
-}
