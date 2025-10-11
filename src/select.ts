@@ -1,7 +1,8 @@
+import { attemptNotOk, attemptOkUndefined } from './_attempt-results.js'
 import { shuffle } from './_fisherYatesShuffle.js'
 import { NamedError } from './_NamedError.js'
 import { AbortablePromise } from './AbortablePromise.js'
-import type { Selectable } from './channel-api.js'
+import type { Selectable, SelectableAttemptResult } from './channel-api.js'
 
 export type SelectArgsMap = Record<string, SelectArg>
 
@@ -114,7 +115,7 @@ export async function select<TArgs extends SelectArgsMap>(
                 return r
             }
 
-            let attemptResult: readonly [true, unknown] | readonly [false]
+            let attemptResult: SelectableAttemptResult<unknown>
 
             try {
                 attemptResult = winner.self.attempt()
@@ -123,10 +124,10 @@ export async function select<TArgs extends SelectArgsMap>(
                 throw new SelectError(winner.name, exception)
             }
 
-            if (attemptResult[0]) {
+            if (attemptResult.ok) {
                 const r = {
                     type: winner.name,
-                    value: attemptResult[1]
+                    value: attemptResult.value,
                 }
 
                 //@ts-expect-error
@@ -258,10 +259,10 @@ export function raceAbortSignal(signal: AbortSignal): Selectable<unknown> {
 
         attempt() {
             if (signal.aborted) {
-                return [true, signal.reason]
+                return { ok: true, value: signal.reason }
             }
 
-            return [false]
+            return attemptNotOk
         },
     }
 }
@@ -303,7 +304,7 @@ export const raceNever: Selectable<never> = {
     },
 
     attempt() {
-        return [false]
+        return attemptNotOk
     },
 }
 
@@ -335,7 +336,7 @@ export function raceTimeout(ms: number): Selectable<void> {
         },
 
         attempt() {
-            return elapsed ? [true, undefined] : [false]
+            return elapsed ? attemptOkUndefined : attemptNotOk
         },
     }
 }

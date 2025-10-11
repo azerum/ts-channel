@@ -176,5 +176,13 @@ export class CannotWriteIntoClosedChannel extends NamedError {}
 
 export interface Selectable<T> {
     wait: <const R>(value: R, signal: AbortSignal) => Promise<R>
-    attempt: () => readonly [true, T] | readonly [false]
+
+    /**
+     * Callers must not mutate the returned value
+     */
+    attempt: () => SelectableAttemptResult<T>
 }
+
+export type SelectableAttemptResult<T> = 
+    | { readonly ok: true, readonly value: T }
+    | { readonly ok: false }

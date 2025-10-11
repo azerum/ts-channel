@@ -78,13 +78,19 @@ export function mapReadableChannel<T extends NotUndefined, R extends NotUndefine
                 },
 
                 attempt() {
-                    const value = p.attempt()
+                    const result = p.attempt()
 
-                    if (value[0]) {
-                        return [true, fn(value[1]!)]
+                    if (result.ok) {
+                        return { 
+                            ok: true, 
+                            
+                            value: result.value === undefined 
+                                ? undefined 
+                                : fn(result.value) 
+                        }
                     }
 
-                    return value
+                    return result
                 },
             }
         },

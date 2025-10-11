@@ -1,4 +1,5 @@
 import { FifoRingBuffer } from './_FifoRingBuffer.js'
+import { attemptNotOk, attemptOkUndefined } from './_attempt-results.js'
 import { AbortablePromise } from './AbortablePromise.js'
 import { asyncIteratorForChannel } from './asyncIteratorForChannel.js'
 import { CannotWriteIntoClosedChannel, type NotUndefined, type ReadableChannel, type Selectable, type WritableChannel } from './channel-api.js'
@@ -251,13 +252,13 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
             },
 
             attempt: () => {
-                const v = this.tryRead()
+                const value = this.tryRead()
 
-                if (v !== undefined || this._closed) {
-                    return [true, v]
+                if (value !== undefined || this._closed) {
+                    return { ok: true, value }
                 }
 
-                return [false]
+                return attemptNotOk
             },
         }
     }
@@ -270,7 +271,7 @@ export class Channel<T extends NotUndefined> implements ReadableChannel<T>, Writ
 
             attempt: () => {
                 const didWrite = this.tryWrite(value)
-                return didWrite ? [true, undefined] : [false]
+                return didWrite ? attemptOkUndefined : attemptNotOk
             },
         }
     }
