@@ -1,9 +1,10 @@
 import { assert, describe, expect, test } from 'vitest'
 import { Channel } from './Channel.js'
-import { assertNever, select, SelectError, type SelectArgsMap } from './select.js'
+import { select, SelectError, type SelectArgsMap } from './select.js'
 import { expectToBlock } from './_expectToBlock.js'
 import timers from 'timers/promises'
 import { CannotWriteIntoClosedChannel } from './channel-api.js'
+import { assertNever } from './select-helpers.js'
 
 describe('Can select raceRead()', () => {
     test('read can win the race', async () => {
@@ -39,9 +40,9 @@ describe('Can select raceRead()', () => {
         const [winningCh, loosingCh] =
             type === 'ch1'
                 ? [ch1, ch2]
-                : type === 'ch2'
+            : type === 'ch2'
                     ? [ch2, ch1]
-                    : assertNever(type)
+            : assertNever(type)
 
         // Verify that the winning channel was read from and the loosing
         // channel still has a value
@@ -82,9 +83,9 @@ describe('Can select raceWrite()', () => {
         const [winningCh, loosingCh] =
             type === 'ch1'
                 ? [ch1, ch2]
-                : type === 'ch2'
-                    ? [ch2, ch1]
-                    : assertNever(type)
+            : type === 'ch2'
+                ? [ch2, ch1]
+            : assertNever(type)
 
         // Verify that the winning channel was written into and the loosing
         // channel is still empty
@@ -397,6 +398,13 @@ test('When multiple operations are ready, fairly selects the winner', async () =
         }
     })
 
+    /**
+     * Run `select()` with args produced with `makeArgs()` many times. 
+     * Count how many times each arg was selected (`makeArgs()` is expected
+     * to return the same number of args with the same names each time)
+     * 
+     * Verify that the distribution is roughly uniform
+     */
     async function testFairness(
         makeArgs: () => Promise<SelectArgsMap>,
     ) {
