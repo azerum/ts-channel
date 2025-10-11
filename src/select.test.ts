@@ -464,3 +464,19 @@ test('When given empty object, throws', async () => {
     const s = select({})
     await expect(s).rejects.toThrowError()
 })
+
+describe('Bugs', () => {
+    test('Resolved promise always wins a race against readable/writable channel', async () => {
+        for (let i = 0; i < 1000; ++i) {
+            const ch = new Channel(1)
+            await ch.write(1)
+
+            const result = await select({
+                ch: ch.raceRead(),
+                p: Promise.resolve(),
+            })
+
+            expect(result.type).toBe('p')
+        }
+    })
+})
