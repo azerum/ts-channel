@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import { AbortablePromise, AbortedError } from './AbortablePromise.js'
+import { afterEach, assert, describe, expect, test, vi } from 'vitest'
+import { AbortedError, makeAbortablePromise } from './makeAbortablePromise.js'
 import { abortListenersCount } from './_abortListenersCount.js'
 
 afterEach(() => {
@@ -9,7 +9,7 @@ afterEach(() => {
 test('When signal aborts, rejects with AbortedError', async () => {
     const controller = new AbortController()
 
-    const p = new AbortablePromise((_resolve, _reject) => {
+    const p = makeAbortablePromise((_resolve, _reject) => {
         return () => { }
     }, controller.signal)
 
@@ -21,7 +21,7 @@ test('When signal aborts, calls cleanup function returned from executor', async 
     const controller = new AbortController()
     const cleanupFn = vi.fn()
 
-    const p = new AbortablePromise((_resolve, _reject) => {
+    const p = makeAbortablePromise((_resolve, _reject) => {
         return cleanupFn
     }, controller.signal)
 
@@ -37,7 +37,7 @@ describe('When resolves, rejects, or aborts asynchronously, removes signal liste
             vi.useFakeTimers()
             const controller = new AbortController()
 
-            const p = new AbortablePromise((resolve, _reject) => {
+            const p = makeAbortablePromise((resolve, _reject) => {
                 setTimeout(() => {
                     resolve(42)
                 }, 1000)
@@ -58,7 +58,7 @@ describe('When resolves, rejects, or aborts asynchronously, removes signal liste
 
             const controller = new AbortController()
 
-            const p = new AbortablePromise((_resolve, reject) => {
+            const p = makeAbortablePromise((_resolve, reject) => {
                 setTimeout(() => {
                     reject(new Error('Too bad'))
                 }, 1000)
@@ -77,7 +77,7 @@ describe('When resolves, rejects, or aborts asynchronously, removes signal liste
         test('When aborts', async () => {
             const controller = new AbortController()
 
-            const p = new AbortablePromise((_resolve, _reject) => {
+            const p = makeAbortablePromise((_resolve, _reject) => {
                 return () => { }
             }, controller.signal)
 
@@ -96,7 +96,7 @@ describe('When resolves or rejects synchronously, does not add signal listener',
     test('When resolves', async () => {
         const controller = new AbortController()
 
-        const p = new AbortablePromise<void>(resolve => {
+        const p = makeAbortablePromise<void>(resolve => {
             resolve()
             return () => { }
         }, controller.signal)
@@ -108,7 +108,7 @@ describe('When resolves or rejects synchronously, does not add signal listener',
     test('When rejects', async () => {
         const controller = new AbortController()
 
-        const p = new AbortablePromise<void>((_resolve, reject) => {
+        const p = makeAbortablePromise<void>((_resolve, reject) => {
             reject(new Error())
             return () => { }
         }, controller.signal)
@@ -127,7 +127,7 @@ test(
         controller.abort()
 
         const executor = vi.fn(() => () => { })
-        const p = new AbortablePromise(executor, controller.signal)
+        const p = makeAbortablePromise(executor, controller.signal)
 
         await expect(p).rejects.toThrowError(AbortedError)
 
@@ -143,7 +143,7 @@ test(
         const cleanupFn = vi.fn()
         const controller = new AbortController()
 
-        const p = new AbortablePromise((resolve, _reject) => {
+        const p = makeAbortablePromise((resolve, _reject) => {
             controller.signal.addEventListener('abort', () => {
                 resolve(42)
             })
@@ -156,3 +156,31 @@ test(
         expect(cleanupFn).not.toHaveBeenCalled()
     }
 )
+
+describe('Settled abortable promise can win Promise.race() against regular promise', () => {
+    test('When resolves', async () => {
+        const p1 = makeAbortablePromise(resolve => {
+            resolve(1)
+            return null
+        })
+
+        const p2 = Promise.resolve(2)
+
+        const result = await Promise.race([p1, p2])
+        expect(result).toBe(1)
+    })
+
+    test('When rejects', async () => {
+        const p1 = makeAbortablePromise((_resolve, reject) => {
+            reject(new Error('1'))
+            return null
+        })
+
+        const p2 = Promise.resolve(new Error('2'))
+
+        const result = await Promise.race([p1, p2]).catch(e => e)
+
+        assert(result instanceof Error)
+        expect(result.message).toBe('1')
+    })
+})

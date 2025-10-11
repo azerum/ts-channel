@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { returnOnAbort } from './select-helpers.js'
 import { expectToBlock } from './_expectToBlock.js'
 import { abortListenersCount } from './_abortListenersCount.js'
-import { AbortedError } from './AbortablePromise.js'
+import { AbortedError } from './makeAbortablePromise.js'
 
 describe('returnOnAbort()', () => {
     test('Resolves with signal.reason when signal aborts', async () => {

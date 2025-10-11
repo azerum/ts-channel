@@ -45,31 +45,26 @@ import { NamedError } from './_NamedError.js'
  * }
  * ```
  */
-export class AbortablePromise<T> extends Promise<T> {
-    private hasSettled = false
+export function makeAbortablePromise<T>(
+    executor: (
+        resolve: (value: T) => void,
+        reject: (exception: unknown) => void
+    ) => (() => void) | null,
 
-    constructor(
-        executor: (
-            resolve: (value: T) => void, 
-            reject: (exception: unknown) => void
-        ) => (() => void) | null,
-        
-        signal?: AbortSignal
-    ) {
-        let resolve!: (value: T) => void
-        let reject!: (exception: unknown) => void
+    signal?: AbortSignal
+): Promise<T> {
+    return new Promise<T>((doResolve, doReject) => {
+        let hasSettled = false
 
-        super((doResolve, doReject) => {
-            resolve = value => {
-                doResolve(value)
-                this.hasSettled = true
-            }
+        const resolve = (value: T) => {
+            doResolve(value)
+            hasSettled = true
+        }
 
-            reject = reason => {
-                doReject(reason)
-                this.hasSettled = true
-            }
-        })
+        const reject = (reason: unknown) => {
+            doReject(reason)
+            hasSettled = true
+        }
 
         if (signal?.aborted) {
             reject(new AbortedError())
@@ -77,7 +72,7 @@ export class AbortablePromise<T> extends Promise<T> {
         }
 
         const abortListener = () => {
-            if (!this.hasSettled) {
+            if (!hasSettled) {
                 rejectAndRemoveListener(new AbortedError())
                 cleanupOnAborted?.call(undefined)
             }
@@ -94,14 +89,14 @@ export class AbortablePromise<T> extends Promise<T> {
         }
 
         const cleanupOnAborted = executor(
-            resolveAndRemoveListener, 
+            resolveAndRemoveListener,
             rejectAndRemoveListener
         )
 
-        if (!this.hasSettled) {
+        if (!hasSettled) {
             signal?.addEventListener('abort', abortListener, { once: true })
         }
-    }
+    })
 }
 
-export class AbortedError extends NamedError {}
+export class AbortedError extends NamedError { }

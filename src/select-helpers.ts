@@ -1,7 +1,7 @@
-import { AbortablePromise } from './AbortablePromise.js'
+import { makeAbortablePromise } from './makeAbortablePromise.js'
 
 export function sleep<const T>(ms: number, value: T, signal?: AbortSignal): Promise<T> {
-    return new AbortablePromise(resolve => {
+    return makeAbortablePromise(resolve => {
         const handle = setTimeout(() => {
             resolve(value)
         }, ms)
@@ -12,7 +12,7 @@ export function sleep<const T>(ms: number, value: T, signal?: AbortSignal): Prom
 
 export function returnOnAbort(signal: AbortSignal) {
     return (cancelSignal?: AbortSignal): Promise<unknown> => {
-        return new AbortablePromise(resolve => {
+        return makeAbortablePromise(resolve => {
             const listener = () => resolve(signal.reason)
             signal.addEventListener('abort', listener, { once: true })
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { Channel } from './Channel.js'
 import { expectToBlock } from './_expectToBlock.js'
 import { CannotWriteIntoClosedChannel } from './channel-api.js'
-import { AbortedError } from './AbortablePromise.js'
+import { AbortedError } from './makeAbortablePromise.js'
 
 async function makeChannelWithFullBuffer(capacity: number) {
     if (capacity === 0) {

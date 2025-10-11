@@ -1,8 +1,8 @@
 import { attemptNotOk } from './_attempt-results.js'
 import { shuffle } from './_fisherYatesShuffle.js'
 import { NamedError } from './_NamedError.js'
-import { AbortablePromise } from './AbortablePromise.js'
 import type { Selectable, SelectableAttemptResult } from './channel-api.js'
+import { makeAbortablePromise } from './makeAbortablePromise.js'
 
 export type SelectArgsMap = Record<string, NullableSelectArg>
 
@@ -210,7 +210,7 @@ export function assertNever(value: never): never {
 export function raceAbortSignal(signal: AbortSignal): Selectable<unknown> {
     return {
         wait(value, cancelSignal) {
-            return new AbortablePromise(resolve => {
+            return makeAbortablePromise(resolve => {
                 if (signal.aborted) {
                     resolve(value)
                     return null

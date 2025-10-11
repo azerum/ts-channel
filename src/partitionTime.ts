@@ -1,5 +1,6 @@
 import type { NotUndefined, ReadableChannel } from './channel-api.js'
-import { raceTimeout, select } from './select.js'
+import { sleep } from './select-helpers.js'
+import { select } from './select.js'
 
 /**
  * Reads from `source` channel in groups of size `groupSize`. However, if more
@@ -83,7 +84,7 @@ export async function* partitionTime<T extends NotUndefined>(
         while (group.length < groupSize) {
             const winner = await select({
                 value: source.raceRead(),
-                timeout: raceTimeout(nextValueTimeoutMs),
+                timedOut: s => sleep(nextValueTimeoutMs, undefined, s)
             })
 
             switch (winner.type) {
@@ -97,7 +98,7 @@ export async function* partitionTime<T extends NotUndefined>(
                     continue
                 }
 
-                case 'timeout': {
+                case 'timedOut': {
                     return group
                 }
             }
